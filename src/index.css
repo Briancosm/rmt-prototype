@@ -1,0 +1,42 @@
+@import url("https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 33% 98%;
+    --foreground: 214 32% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 214 32% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 214 32% 14%;
+    --primary: 201 87% 33%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 36% 96%;
+    --secondary-foreground: 214 28% 24%;
+    --muted: 214 24% 93%;
+    --muted-foreground: 216 16% 45%;
+    --accent: 191 65% 90%;
+    --accent-foreground: 199 88% 26%;
+    --destructive: 0 84% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 216 19% 84%;
+    --input: 216 19% 84%;
+    --ring: 201 87% 33%;
+    --success: 151 55% 31%;
+    --success-foreground: 0 0% 100%;
+    --warning: 24 95% 43%;
+    --warning-foreground: 0 0% 100%;
+    --radius: 0.7rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+}
