@@ -796,7 +796,7 @@ function calculatePendingChanges(publishedEvents: EventRecord[], draftEvents: Ev
 function attentionBadge(attention: AttentionFlag) {
   if (attention === "underperforming") {
     return (
-      <Badge variant="warning" className="mt-1 w-fit justify-center whitespace-nowrap text-center">
+      <Badge variant="warning" className="ml-1.5 shrink-0 whitespace-nowrap">
         Needs Attention
       </Badge>
     );
@@ -843,24 +843,27 @@ function DraftActionFooter({
   const scopeSuffix = scopeLabel ? ` ${scopeLabel}` : "";
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-[70] border-t bg-card/95 backdrop-blur">
+    <footer className="fixed inset-x-0 bottom-0 z-[70] border-t border-border/60 bg-card/98 backdrop-blur-sm">
       <div className="mx-auto flex max-w-[1450px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <p className="text-sm text-muted-foreground">
-          {hasChanges
-            ? `${stagedCount} staged change${stagedCount === 1 ? "" : "s"}${scopeSuffix} pending publish.`
-            : `No staged changes${scopeSuffix}.`}
-        </p>
+        <div className="flex items-center gap-2">
+          <div className={cn("h-1.5 w-1.5 rounded-full", hasChanges ? "bg-warning" : "bg-muted-foreground/30")} />
+          <p className={cn("text-sm", hasChanges ? "font-medium text-foreground" : "text-muted-foreground")}>
+            {hasChanges
+              ? `${stagedCount} staged change${stagedCount === 1 ? "" : "s"}${scopeSuffix} ready to publish`
+              : `No staged changes${scopeSuffix}`}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           {extraActionLabel && onExtraAction && (
             <Button variant="secondary" onClick={onExtraAction} disabled={extraActionDisabled}>
               {extraActionLabel}
             </Button>
           )}
-          <Button variant="outline" onClick={onDiscard} disabled={!hasChanges}>
+          <Button variant="ghost" onClick={onDiscard} disabled={!hasChanges} className="text-muted-foreground hover:text-foreground">
             Discard Draft
           </Button>
-          <Button onClick={onPublish} disabled={!hasChanges}>
-            {`Publish Changes (${stagedCount})`}
+          <Button onClick={onPublish} disabled={!hasChanges} className={cn(!hasChanges && "opacity-40")}>
+            {hasChanges ? `Publish ${stagedCount} Change${stagedCount === 1 ? "" : "s"}` : "Publish Changes"}
           </Button>
         </div>
       </div>
@@ -4845,13 +4848,13 @@ export default function App() {
 
   const sortIconForKey = (key: SortKey) => {
     if (sortState.key !== key) {
-      return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />;
+      return <ArrowUpDown className="h-3 w-3 text-muted-foreground/40 transition-opacity group-hover:text-muted-foreground/70" />;
     }
 
     return sortState.direction === "asc" ? (
-      <ArrowUp className="h-3.5 w-3.5 text-primary" />
+      <ArrowUp className="h-3 w-3 text-foreground" />
     ) : (
-      <ArrowDown className="h-3.5 w-3.5 text-primary" />
+      <ArrowDown className="h-3 w-3 text-foreground" />
     );
   };
 
@@ -4934,30 +4937,32 @@ export default function App() {
 
         <section className="overflow-hidden rounded-2xl border bg-card/95 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)] backdrop-blur">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-secondary/65 px-4 py-3 sm:px-6">
-            <div className="flex flex-1 flex-wrap items-center gap-3">
-              <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  className="pl-9"
-                  placeholder="Search events or venue"
-                  aria-label="Search events"
-                />
+            <div className="flex flex-1 flex-wrap items-center gap-2">
+              <div className="flex min-w-[320px] flex-1 items-center overflow-hidden rounded-lg border border-border bg-background shadow-sm sm:max-w-md">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    className="rounded-none border-0 pl-9 shadow-none focus-visible:ring-0"
+                    placeholder="Search events or venue"
+                    aria-label="Search events"
+                  />
+                </div>
+                <div className="h-5 w-px bg-border" />
+                <Select value={statusFilter} onValueChange={(next) => setStatusFilter(next as FilterValue)}>
+                  <SelectTrigger className="w-[150px] rounded-none border-0 shadow-none focus:ring-0 focus-visible:ring-0">
+                    <SelectValue placeholder="Filter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusFilterOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-
-              <Select value={statusFilter} onValueChange={(next) => setStatusFilter(next as FilterValue)}>
-                <SelectTrigger className="w-[190px] bg-background">
-                  <SelectValue placeholder="Filter" />
-                </SelectTrigger>
-                <SelectContent>
-                  {statusFilterOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
           </div>
@@ -4974,14 +4979,9 @@ export default function App() {
               <div>
                 <p className="text-sm font-medium text-foreground">
                   {selectedEventIds.length > 0
-                    ? `${selectedEventIds.length} event${selectedEventIds.length === 1 ? "" : "s"} selected`
-                    : "Events"}
+                    ? `${selectedEventIds.length} of ${visibleEventIds.length} selected`
+                    : `${visibleEventIds.length} event${visibleEventIds.length === 1 ? "" : "s"}`}
                 </p>
-                {selectedEventIds.length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {selectedEventIds.length} selection{selectedEventIds.length === 1 ? "" : "s"} checked
-                  </p>
-                )}
               </div>
 
               {selectedEventIds.length > 0 && (
@@ -5212,55 +5212,45 @@ export default function App() {
                 <TableRow className="hover:bg-secondary/40">
                   <TableHead
                     colSpan={5}
-                    className="w-[1300px] h-7 border-x border-b border-border/70 bg-secondary/15 p-0 text-center"
+                    className="w-[1300px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="rounded-md bg-secondary/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        Event Details
-                      </span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Event Details</span>
                     </div>
                   </TableHead>
                   <TableHead
                     colSpan={1}
-                    className="w-[250px] h-7 border-x border-b border-border/70 bg-secondary/15 p-0 text-center"
+                    className="w-[250px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="rounded-md bg-secondary/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        Pricing
-                      </span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Pricing</span>
                     </div>
                   </TableHead>
                   <TableHead
                     colSpan={3}
-                    className="w-[270px] h-7 border-x border-b border-border/70 bg-secondary/15 p-0 text-center"
+                    className="w-[270px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="rounded-md bg-secondary/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        Percent Sold
-                      </span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Percent Sold</span>
                     </div>
                   </TableHead>
                   <TableHead
                     colSpan={3}
-                    className="w-[300px] h-7 border-x border-b border-border/70 bg-secondary/15 p-0 text-center"
+                    className="w-[300px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="rounded-md bg-secondary/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        Sell Through
-                      </span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Sell Through</span>
                     </div>
                   </TableHead>
                   <TableHead
                     colSpan={2}
-                    className="w-[340px] h-7 border-x border-b border-border/70 bg-secondary/15 p-0 text-center"
+                    className="w-[340px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="rounded-md bg-secondary/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                        Revenue
-                      </span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Revenue</span>
                     </div>
                   </TableHead>
-                  <TableHead colSpan={6} className="w-[780px] h-7 border-b border-border/70 bg-secondary/15" />
+                  <TableHead colSpan={6} className="w-[780px] h-5 border-b border-border/60 bg-secondary/20" />
                 </TableRow>
                 <TableRow className="hover:bg-secondary/40">
                   <TableHead className="w-[650px] whitespace-nowrap">
@@ -5277,7 +5267,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => onSort("event")}
-                        className="flex items-center gap-2 whitespace-nowrap"
+                        className="group flex items-center gap-1.5 whitespace-nowrap"
                       >
                         {sortLabelMap.event}
                         {sortIconForKey("event")}
@@ -5288,7 +5278,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => onSort("startTime")}
-                      className="flex items-center gap-2 whitespace-nowrap"
+                      className="group flex items-center gap-1.5 whitespace-nowrap"
                     >
                       {sortLabelMap.startTime}
                       {sortIconForKey("startTime")}
@@ -5301,7 +5291,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => onSort("daysRemaining")}
-                      className="flex items-center gap-2 whitespace-nowrap"
+                      className="group flex items-center gap-1.5 whitespace-nowrap"
                     >
                       {sortLabelMap.daysRemaining}
                       {sortIconForKey("daysRemaining")}
@@ -5335,7 +5325,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => onSort("status")}
-                      className="flex items-center gap-2 whitespace-nowrap"
+                      className="group flex items-center gap-1.5 whitespace-nowrap"
                     >
                       {sortLabelMap.status}
                       {sortIconForKey("status")}
@@ -5380,28 +5370,34 @@ export default function App() {
                   return (
                     <Fragment key={event.id}>
                       <TableRow
+                        onClick={() => toggleExpanded(event.id)}
                         className={cn(
-                          "hover:bg-muted/35",
+                          "cursor-pointer hover:bg-muted/35",
                           event.attention === "underperforming" && "bg-warning/5",
                         )}
                       >
                         <TableCell>
                           <div className="flex items-start gap-3">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="mt-0.5 h-7 w-7"
-                              onClick={() => toggleExpanded(event.id)}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); toggleExpanded(event.id); }}
                               aria-label={isExpanded ? "Collapse event details" : "Expand event details"}
+                              className={cn(
+                                "flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors",
+                                isExpanded
+                                  ? "bg-foreground/8 text-foreground"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
                             >
                               <ChevronRight
-                                className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-90")}
+                                className={cn("h-3.5 w-3.5 transition-transform duration-150", isExpanded && "rotate-90")}
                               />
-                            </Button>
+                            </button>
                             <Checkbox
                               className="mt-1"
                               checked={selectedEventIds.includes(event.id)}
                               onCheckedChange={(checked) => toggleEventSelection(event.id, checked)}
+                              onClick={(e) => e.stopPropagation()}
                               aria-label={`Select ${event.event}`}
                             />
 
@@ -5409,13 +5405,15 @@ export default function App() {
                               <p className="max-w-[540px] whitespace-normal text-base font-medium leading-tight">
                                 {event.event}
                               </p>
-                              <p className="text-xs text-muted-foreground">{event.venueName}</p>
-                              {attentionBadge(event.attention)}
-                              {isPendingPublish && (
-                                <Badge variant="secondary" className="mt-1 w-fit bg-primary/12 text-primary">
-                                  Pending Publish
-                                </Badge>
-                              )}
+                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                <p className="text-xs text-muted-foreground">{event.venueName}</p>
+                                {attentionBadge(event.attention)}
+                                {isPendingPublish && (
+                                  <Badge variant="secondary" className="bg-primary/12 text-primary">
+                                    Pending Publish
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </TableCell>
