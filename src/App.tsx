@@ -2760,7 +2760,7 @@ function formatStartTime(value: number): string {
   const d = new Date(value);
   const hours = d.getHours();
   const minutes = d.getMinutes();
-  const ampm = hours >= 12 ? "PM" : "AM";
+  const ampm = hours >= 12 ? "p" : "a";
   const h = hours % 12 || 12;
   const m = minutes.toString().padStart(2, "0");
   return `${h}:${m}${ampm}`;
