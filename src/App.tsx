@@ -1982,6 +1982,121 @@ function BulkEditEventsModal({
   );
 }
 
+function BulkEditSeatGroupsModal({
+  open,
+  eventName,
+  selectedSeatGroups,
+  values,
+  modes,
+  onClose,
+  onSetValue,
+  onSetMode,
+  onApply,
+  onPublish,
+}: {
+  open: boolean;
+  eventName: string;
+  selectedSeatGroups: SeatGroup[];
+  values: Record<string, string>;
+  modes: Record<string, NumericBulkEditMode>;
+  onClose: () => void;
+  onSetValue: (field: SeatGroupEditableField, value: string) => void;
+  onSetMode: (field: SeatGroupEditableField, mode: NumericBulkEditMode) => void;
+  onApply: () => void;
+  onPublish: () => void;
+}) {
+  if (!open) return null;
+
+  const nameValues = [...new Set(selectedSeatGroups.map((sg) => sg.name))];
+  const priceValues = [...new Set(selectedSeatGroups.map((sg) => sg.currentPrice))];
+  const currentName = nameValues.length === 1 ? nameValues[0] : "Mixed";
+  const currentPrice = priceValues.length === 1 ? formatCurrency(priceValues[0]) : "Mixed";
+  const hasValue = !!(values.name?.trim() || values.currentPrice?.trim());
+
+  const rows: { field: SeatGroupEditableField; label: string; currentValue: string; inputType: "text" | "number" }[] = [
+    { field: "name", label: "Seat Group", currentValue: currentName, inputType: "text" },
+    { field: "currentPrice", label: "Ticket Price", currentValue: currentPrice, inputType: "number" },
+  ];
+
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
+      <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
+        <div className="border-b px-6 py-4">
+          <h2 className="font-heading text-xl font-semibold text-foreground">Bulk Edit Seat Groups</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Editing {selectedSeatGroups.length} seat group{selectedSeatGroups.length === 1 ? "" : "s"} for {eventName}.
+          </p>
+        </div>
+
+        <div className="max-h-[62vh] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/50 bg-secondary/10">
+                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Field</th>
+                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Current</th>
+                <th className="w-[180px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Mode</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">New Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const fieldValue = values[row.field] ?? "";
+                const fieldMode = modes[row.field] ?? "set";
+                const isMixed = row.currentValue === "Mixed";
+                return (
+                  <tr key={row.field} className="border-b border-border/40 last:border-0 align-top hover:bg-muted/20">
+                    <td className="px-4 py-3 font-medium text-foreground">{row.label}</td>
+                    <td className="px-4 py-3">
+                      <p className={cn("text-sm text-foreground", isMixed && "text-muted-foreground")}>{row.currentValue}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {row.inputType === "number" ? (
+                        <Select value={fieldMode} onValueChange={(next) => onSetMode(row.field, next as NumericBulkEditMode)}>
+                          <SelectTrigger className="h-8 w-full bg-background"><SelectValue placeholder="Mode" /></SelectTrigger>
+                          <SelectContent className="!z-[200]">
+                            {numericBulkEditModes.map((mode) => (
+                              <SelectItem key={mode.value} value={mode.value}>{mode.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Input
+                        type={row.inputType}
+                        inputMode={row.inputType === "number" ? "decimal" : "text"}
+                        step={row.inputType === "number" ? "0.01" : undefined}
+                        value={fieldValue}
+                        onChange={(e) => onSetValue(row.field, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") onApply(); if (e.key === "Escape") onClose(); }}
+                        className="h-8 w-full bg-background"
+                        placeholder={
+                          row.inputType === "number"
+                            ? fieldMode === "percent" ? "Enter %" : fieldMode === "flat" ? "Enter amount" : "Set value"
+                            : "Set name"
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t px-6 py-4">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onApply} disabled={!hasValue}>Apply Changes</Button>
+          <Button onClick={onPublish} disabled={!hasValue}>Publish Changes</Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function RecommendedReviewModal({
   open,
   changeRows,
@@ -4662,6 +4777,8 @@ export default function App() {
     Record<string, NumericBulkEditMode>
   >({});
   const [activeBulkEditEventId, setActiveBulkEditEventId] = useState<string | null>(null);
+  const [bulkSeatModalValues, setBulkSeatModalValues] = useState<Record<string, Record<string, string>>>({});
+  const [bulkSeatModalModes, setBulkSeatModalModes] = useState<Record<string, Record<string, NumericBulkEditMode>>>({});
   const [showPublishConfirmation, setShowPublishConfirmation] = useState(false);
   const [showPublishOverlay, setShowPublishOverlay] = useState(false);
   const [showRecommendedReviewModal, setShowRecommendedReviewModal] = useState(false);
@@ -5572,6 +5689,25 @@ export default function App() {
     setActiveBulkEditEventId((current) => (current === eventId ? null : current));
   };
 
+  const applyBulkSeatModalEdit = (eventId: string) => {
+    const selectedSeatGroupIds = selectedSeatGroupsByEvent[eventId] ?? [];
+    if (selectedSeatGroupIds.length === 0) return;
+    const eventValues = bulkSeatModalValues[eventId] ?? {};
+    const eventModes = bulkSeatModalModes[eventId] ?? {};
+    if (eventValues.name?.trim()) {
+      cancelSeatPriceEdit();
+      setDraftSeatRecommendationUndoById({});
+      onSeatGroupBulkEdit(eventId, selectedSeatGroupIds, "name", eventValues.name, "set");
+    }
+    if (eventValues.currentPrice?.trim()) {
+      cancelSeatPriceEdit();
+      setDraftSeatRecommendationUndoById({});
+      onSeatGroupBulkEdit(eventId, selectedSeatGroupIds, "currentPrice", eventValues.currentPrice, eventModes.currentPrice ?? "set");
+    }
+    setBulkSeatModalValues((c) => ({ ...c, [eventId]: {} }));
+    setActiveBulkEditEventId(null);
+  };
+
   const openRecommendedReviewModal = () => {
     setRecommendedReviewValuesById(
       Object.fromEntries(
@@ -5990,6 +6126,24 @@ export default function App() {
                       onApply={applyBulkEventEdits}
                       onPublish={() => { applyBulkEventEdits(); setShowPublishOverlay(true); }}
                     />
+                    {(() => {
+                      const activeEvent = activeBulkEditEventId ? draftEvents.find((e) => e.id === activeBulkEditEventId) ?? null : null;
+                      const activeSeatGroups = activeEvent ? activeEvent.seatGroups.filter((sg) => (selectedSeatGroupsByEvent[activeBulkEditEventId!] ?? []).includes(sg.id)) : [];
+                      return (
+                        <BulkEditSeatGroupsModal
+                          open={activeBulkEditEventId !== null}
+                          eventName={activeEvent?.event ?? ""}
+                          selectedSeatGroups={activeSeatGroups}
+                          values={bulkSeatModalValues[activeBulkEditEventId ?? ""] ?? {}}
+                          modes={bulkSeatModalModes[activeBulkEditEventId ?? ""] ?? {}}
+                          onClose={() => setActiveBulkEditEventId(null)}
+                          onSetValue={(field, value) => setBulkSeatModalValues((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: value } }))}
+                          onSetMode={(field, mode) => setBulkSeatModalModes((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: mode } }))}
+                          onApply={() => applyBulkSeatModalEdit(activeBulkEditEventId!)}
+                          onPublish={() => { applyBulkSeatModalEdit(activeBulkEditEventId!); setShowPublishOverlay(true); }}
+                        />
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -6219,51 +6373,6 @@ export default function App() {
                                               >
                                                 <Trash2 className="h-3.5 w-3.5" />
                                               </Button>
-                                              {isBulkEditOverlayOpen && createPortal(
-                                                <div
-                                                  className="fixed z-50 w-[280px] rounded-xl border border-border/80 bg-card p-3 shadow-xl"
-                                                  style={(() => {
-                                                    const rect = seatBulkEditBtnRefs.current[event.id]?.getBoundingClientRect();
-                                                    return rect ? { top: rect.bottom + 8, left: Math.max(8, rect.right - 280) } : { top: 0, left: 0 };
-                                                  })()}
-                                                >
-                                                  <div className="space-y-3">
-                                                    <Select value={bulkSeatEditField} onValueChange={(next) => { setBulkSeatEditFieldByEvent((c) => ({ ...c, [event.id]: next as SeatGroupEditableField })); setBulkSeatEditModeByEvent((c) => ({ ...c, [event.id]: "set" })); }}>
-                                                      <SelectTrigger className="h-8 w-full bg-background"><SelectValue placeholder="Field" /></SelectTrigger>
-                                                      <SelectContent>
-                                                        <SelectItem value="name">Seat Group</SelectItem>
-                                                        <SelectItem value="currentPrice">Current Price</SelectItem>
-                                                      </SelectContent>
-                                                    </Select>
-                                                    {bulkSeatEditField === "currentPrice" && (
-                                                      <Select value={bulkSeatEditMode} onValueChange={(next) => setBulkSeatEditModeByEvent((c) => ({ ...c, [event.id]: next as NumericBulkEditMode }))}>
-                                                        <SelectTrigger className="h-8 w-full bg-background"><SelectValue placeholder="Mode" /></SelectTrigger>
-                                                        <SelectContent>
-                                                          {numericBulkEditModes.map((mode) => (
-                                                            <SelectItem key={mode.value} value={mode.value}>{mode.label}</SelectItem>
-                                                          ))}
-                                                        </SelectContent>
-                                                      </Select>
-                                                    )}
-                                                    <Input
-                                                      type={bulkSeatEditField === "currentPrice" ? "number" : "text"}
-                                                      inputMode={bulkSeatEditField === "currentPrice" ? "decimal" : "text"}
-                                                      step={bulkSeatEditField === "currentPrice" ? "0.01" : undefined}
-                                                      value={bulkSeatEditValue}
-                                                      onChange={(e) => setBulkSeatEditValues((c) => ({ ...c, [event.id]: e.target.value }))}
-                                                      onKeyDown={(e) => { if (e.key === "Enter") applyBulkSeatEdit(event.id); if (e.key === "Escape") setActiveBulkEditEventId(null); }}
-                                                      className="h-8 w-full bg-background"
-                                                      placeholder={bulkSeatEditField === "name" ? "Set name" : bulkSeatEditMode === "percent" ? "Increase by %" : bulkSeatEditMode === "flat" ? "Increase by amount" : "Set price"}
-                                                      aria-label={`Bulk edit ${bulkSeatEditField} for ${event.event}`}
-                                                    />
-                                                    <div className="flex items-center justify-end gap-2">
-                                                      <Button variant="ghost" size="sm" onClick={() => setActiveBulkEditEventId(null)}>Cancel</Button>
-                                                      <Button variant="secondary" size="sm" onClick={() => applyBulkSeatEdit(event.id)} disabled={bulkSeatEditValue.trim() === ""}>Apply</Button>
-                                                    </div>
-                                                  </div>
-                                                </div>,
-                                                document.body,
-                                              )}
                                             </div>
                                           )}
                                         </div>
@@ -6663,6 +6772,24 @@ export default function App() {
                     onApply={applyBulkEventEdits}
                     onPublish={() => { applyBulkEventEdits(); setShowPublishOverlay(true); }}
                   />
+                  {(() => {
+                    const activeEvent = activeBulkEditEventId ? draftEvents.find((e) => e.id === activeBulkEditEventId) ?? null : null;
+                    const activeSeatGroups = activeEvent ? activeEvent.seatGroups.filter((sg) => (selectedSeatGroupsByEvent[activeBulkEditEventId!] ?? []).includes(sg.id)) : [];
+                    return (
+                      <BulkEditSeatGroupsModal
+                        open={activeBulkEditEventId !== null}
+                        eventName={activeEvent?.event ?? ""}
+                        selectedSeatGroups={activeSeatGroups}
+                        values={bulkSeatModalValues[activeBulkEditEventId ?? ""] ?? {}}
+                        modes={bulkSeatModalModes[activeBulkEditEventId ?? ""] ?? {}}
+                        onClose={() => setActiveBulkEditEventId(null)}
+                        onSetValue={(field, value) => setBulkSeatModalValues((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: value } }))}
+                        onSetMode={(field, mode) => setBulkSeatModalModes((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: mode } }))}
+                        onApply={() => applyBulkSeatModalEdit(activeBulkEditEventId!)}
+                        onPublish={() => { applyBulkSeatModalEdit(activeBulkEditEventId!); setShowPublishOverlay(true); }}
+                      />
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -7112,112 +7239,6 @@ export default function App() {
                                           >
                                             <Trash2 className="h-3.5 w-3.5" />
                                           </Button>
-                                        {isBulkEditOverlayOpen && createPortal(
-                                          <div
-                                            className="fixed z-50 w-[280px] rounded-xl border border-border/80 bg-card p-3 shadow-xl"
-                                            style={(() => {
-                                              const rect = seatBulkEditBtnRefs.current[event.id]?.getBoundingClientRect();
-                                              return rect ? { top: rect.bottom + 8, left: Math.max(8, rect.right - 280) } : { top: 0, left: 0 };
-                                            })()}
-                                          >
-                                            <div className="space-y-3">
-                                              <Select
-                                                value={bulkSeatEditField}
-                                                onValueChange={(next) =>
-                                                  {
-                                                    setBulkSeatEditFieldByEvent((current) => ({
-                                                      ...current,
-                                                      [event.id]: next as SeatGroupEditableField,
-                                                    }));
-                                                    setBulkSeatEditModeByEvent((current) => ({
-                                                      ...current,
-                                                      [event.id]: "set",
-                                                    }));
-                                                  }
-                                                }
-                                              >
-                                                <SelectTrigger className="h-8 w-full bg-background">
-                                                  <SelectValue placeholder="Field" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                  <SelectItem value="name">Seat Group</SelectItem>
-                                                  <SelectItem value="currentPrice">Current Price</SelectItem>
-                                                </SelectContent>
-                                              </Select>
-                                              {bulkSeatEditField === "currentPrice" && (
-                                                <Select
-                                                  value={bulkSeatEditMode}
-                                                  onValueChange={(next) =>
-                                                    setBulkSeatEditModeByEvent((current) => ({
-                                                      ...current,
-                                                      [event.id]: next as NumericBulkEditMode,
-                                                    }))
-                                                  }
-                                                >
-                                                  <SelectTrigger className="h-8 w-full bg-background">
-                                                    <SelectValue placeholder="Mode" />
-                                                  </SelectTrigger>
-                                                  <SelectContent>
-                                                    {numericBulkEditModes.map((mode) => (
-                                                      <SelectItem key={mode.value} value={mode.value}>
-                                                        {mode.label}
-                                                      </SelectItem>
-                                                    ))}
-                                                  </SelectContent>
-                                                </Select>
-                                              )}
-                                              <Input
-                                                type={bulkSeatEditField === "currentPrice" ? "number" : "text"}
-                                                inputMode={bulkSeatEditField === "currentPrice" ? "decimal" : "text"}
-                                                step={bulkSeatEditField === "currentPrice" ? "0.01" : undefined}
-                                                value={bulkSeatEditValue}
-                                                onChange={(selectionEvent) =>
-                                                  setBulkSeatEditValues((current) => ({
-                                                    ...current,
-                                                    [event.id]: selectionEvent.target.value,
-                                                  }))
-                                                }
-                                                onKeyDown={(selectionEvent) => {
-                                                  if (selectionEvent.key === "Enter") {
-                                                    applyBulkSeatEdit(event.id);
-                                                  }
-                                                  if (selectionEvent.key === "Escape") {
-                                                    setActiveBulkEditEventId(null);
-                                                  }
-                                                }}
-                                                className="h-8 w-full bg-background"
-                                                placeholder={
-                                                  bulkSeatEditField === "name"
-                                                    ? "Set name"
-                                                    : bulkSeatEditMode === "percent"
-                                                      ? "Increase by %"
-                                                      : bulkSeatEditMode === "flat"
-                                                        ? "Increase by amount"
-                                                        : "Set price"
-                                                }
-                                                aria-label={`Bulk edit ${bulkSeatEditField} for ${event.event}`}
-                                              />
-                                              <div className="flex items-center justify-end gap-2">
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() => setActiveBulkEditEventId(null)}
-                                                >
-                                                  Cancel
-                                                </Button>
-                                                <Button
-                                                  variant="secondary"
-                                                  size="sm"
-                                                  onClick={() => applyBulkSeatEdit(event.id)}
-                                                  disabled={bulkSeatEditValue.trim() === ""}
-                                                >
-                                                  Apply
-                                                </Button>
-                                              </div>
-                                            </div>
-                                          </div>,
-                                          document.body,
-                                        )}
                                       </div>
                                     )}
                                     </div>
