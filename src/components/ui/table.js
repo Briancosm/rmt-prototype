@@ -1,7 +1,7 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import * as React from "react";
 import { cn } from "@/lib/utils";
-const Table = React.forwardRef(({ className, ...props }, ref) => (_jsx("div", { className: "relative w-full overflow-auto", children: _jsx("table", { ref: ref, className: cn("w-full caption-bottom text-sm", className), ...props }) })));
+const Table = React.forwardRef(({ className, wrapperClassName, autoWidth = false, ...props }, ref) => (_jsx("div", { className: cn("relative overflow-auto", autoWidth ? "w-fit" : "w-full", wrapperClassName), children: _jsx("table", { ref: ref, className: cn(autoWidth ? "w-auto" : "w-full", "caption-bottom text-sm", className), ...props }) })));
 Table.displayName = "Table";
 const TableHeader = React.forwardRef(({ className, ...props }, ref) => (_jsx("thead", { ref: ref, className: cn("[&_tr]:border-b", className), ...props })));
 TableHeader.displayName = "TableHeader";
@@ -11,7 +11,7 @@ const TableFooter = React.forwardRef(({ className, ...props }, ref) => (_jsx("tf
 TableFooter.displayName = "TableFooter";
 const TableRow = React.forwardRef(({ className, ...props }, ref) => (_jsx("tr", { ref: ref, className: cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className), ...props })));
 TableRow.displayName = "TableRow";
-const TableHead = React.forwardRef(({ className, ...props }, ref) => (_jsx("th", { ref: ref, className: cn("h-12 px-2 text-left align-middle text-sm font-semibold text-foreground [&:has([role=checkbox])]:pr-0", className), ...props })));
+const TableHead = React.forwardRef(({ className, ...props }, ref) => (_jsx("th", { ref: ref, className: cn("h-12 px-2 text-left align-middle text-sm font-semibold text-muted-foreground/60 [&:has([role=checkbox])]:pr-0", className), ...props })));
 TableHead.displayName = "TableHead";
 const TableCell = React.forwardRef(({ className, ...props }, ref) => (_jsx("td", { ref: ref, className: cn("px-2 py-4 align-middle [&:has([role=checkbox])]:pr-0", className), ...props })));
 TableCell.displayName = "TableCell";

@@ -2,17 +2,18 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
-      <table
-        ref={ref}
-        className={cn("w-full caption-bottom text-sm", className)}
-        {...props}
-      />
-    </div>
-  ),
-);
+const Table = React.forwardRef<
+  HTMLTableElement,
+  React.HTMLAttributes<HTMLTableElement> & { wrapperClassName?: string; autoWidth?: boolean }
+>(({ className, wrapperClassName, autoWidth = false, ...props }, ref) => (
+  <div className={cn("relative overflow-auto", autoWidth ? "w-fit" : "w-full", wrapperClassName)}>
+    <table
+      ref={ref}
+      className={cn(autoWidth ? "w-auto" : "w-full", "caption-bottom text-sm", className)}
+      {...props}
+    />
+  </div>
+));
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<
@@ -65,7 +66,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-12 px-2 text-left align-middle text-sm font-semibold text-foreground [&:has([role=checkbox])]:pr-0",
+      "h-8 px-2 text-left align-middle text-sm font-semibold text-muted-foreground/60 [&:has([role=checkbox])]:pr-0",
       className,
     )}
     {...props}
@@ -79,7 +80,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("px-2 py-4 align-middle [&:has([role=checkbox])]:pr-0", className)}
+    className={cn("px-2 py-1.5 align-middle [&:has([role=checkbox])]:pr-0", className)}
     {...props}
   />
 ));
