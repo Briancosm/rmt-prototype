@@ -6003,8 +6003,44 @@ export default function App() {
                   <col style={{ width: "180px" }} />
                   <col style={{ width: "150px" }} />
                   <col style={{ width: "210px" }} />
+                  <col style={{ width: "100px" }} />
+                  <col style={{ width: "110px" }} />
+                  <col style={{ width: "90px" }} />
+                  <col style={{ width: "100px" }} />
+                  <col style={{ width: "110px" }} />
+                  <col style={{ width: "90px" }} />
+                  <col style={{ width: "100px" }} />
+                  <col style={{ width: "110px" }} />
+                  <col style={{ width: "90px" }} />
                 </colgroup>
                 <TableHeader className="bg-card sticky top-0 z-10 shadow-[0_1px_3px_0_rgba(0,0,0,0.06)]">
+                  <TableRow className="bg-card hover:bg-card">
+                    <TableHead colSpan={4} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
+                      <div className="flex h-full items-center justify-center">
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Event Details</span>
+                      </div>
+                    </TableHead>
+                    <TableHead className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
+                      <div className="flex h-full items-center justify-center">
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Pricing</span>
+                      </div>
+                    </TableHead>
+                    <TableHead colSpan={3} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
+                      <div className="flex h-full items-center justify-center">
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Dome</span>
+                      </div>
+                    </TableHead>
+                    <TableHead colSpan={3} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
+                      <div className="flex h-full items-center justify-center">
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Hall</span>
+                      </div>
+                    </TableHead>
+                    <TableHead colSpan={3} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
+                      <div className="flex h-full items-center justify-center">
+                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">GA</span>
+                      </div>
+                    </TableHead>
+                  </TableRow>
                   <TableRow className="bg-card hover:bg-card">
                     <TableHead className="w-[480px] whitespace-nowrap">
                       <div className="flex items-center gap-3">
@@ -6032,7 +6068,16 @@ export default function App() {
                     </TableHead>
                     <TableHead className="w-[110px] whitespace-nowrap">Days / Window</TableHead>
                     <TableHead className="w-[150px] whitespace-nowrap text-center">Tickets Sold</TableHead>
-                    <TableHead className="w-[210px] whitespace-nowrap text-center">Price Range</TableHead>
+                    <TableHead className="w-[210px] whitespace-nowrap text-center border-r border-border/40">Price Range</TableHead>
+                    <TableHead className="w-[100px] whitespace-nowrap text-center border-l border-border/70">Sold</TableHead>
+                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
+                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
+                    <TableHead className="w-[100px] whitespace-nowrap text-center">Sold</TableHead>
+                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
+                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
+                    <TableHead className="w-[100px] whitespace-nowrap text-center">Sold</TableHead>
+                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
+                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -6051,6 +6096,7 @@ export default function App() {
                     const domePriceRange = formatSeatGroupPriceRange(event, "currentPrice");
                     const hasSoldData = event.domeSold !== null || event.hallSold !== null || event.gaSold !== null;
                     const totalSold = (event.domeSold ?? 0) + (event.hallSold ?? 0) + (event.gaSold ?? 0);
+                    const gaSoldPct = getSeatGroupByName(event, "GA")?.soldPct ?? null;
 
                     return (
                       <Fragment key={event.id}>
@@ -6109,11 +6155,38 @@ export default function App() {
                           <TableCell className="whitespace-nowrap border-x border-border/40 text-center">
                             {domePriceRange}
                           </TableCell>
+                          <TableCell className="text-center border-l border-border/40">
+                            {event.domeSold !== null ? formatWholeNumber(event.domeSold) : "--"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {event.domeSoldProjected !== null ? formatWholeNumber(event.domeSoldProjected) : "--"}
+                          </TableCell>
+                          <TableCell className="text-center border-r border-border/40">
+                            <SellThroughBar pct={event.soldPct} />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {event.hallSold !== null ? formatWholeNumber(event.hallSold) : "--"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {event.hallSoldProjected !== null ? formatWholeNumber(event.hallSoldProjected) : "--"}
+                          </TableCell>
+                          <TableCell className="text-center border-r border-border/40">
+                            <SellThroughBar pct={event.hallSoldPct} />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {event.gaSold !== null ? formatWholeNumber(event.gaSold) : "--"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {event.gaSoldProjected !== null ? formatWholeNumber(event.gaSoldProjected) : "--"}
+                          </TableCell>
+                          <TableCell className="text-center border-r border-border/40">
+                            <SellThroughBar pct={gaSoldPct} />
+                          </TableCell>
                         </TableRow>
 
                         {isExpanded && (
                           <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                            <TableCell colSpan={5} className="p-0">
+                            <TableCell colSpan={14} className="p-0">
                               <div className="mx-5 my-4 max-w-[1500px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
                                 {hasSeatGroups ? (
                                   <>
