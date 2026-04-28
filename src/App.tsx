@@ -518,7 +518,7 @@ const initialEvents: EventRecord[] = [
   },
   {
     id: "evt-005",
-    event: "Cleveland Browns vs. Pittsburgh Steelers",
+    event: "Harry Potter and the Sorcerer's Stone",
     eventCategory: "Film + Live Score",
     venueName: "Cleveland",
     startTimeLabel: "10/31/25 2:00 PM",
@@ -665,7 +665,7 @@ const initialEvents: EventRecord[] = [
   },
   {
     id: "evt-007",
-    event: "Interstellar — IMAX Experience",
+    event: "Harry Potter and the Sorcerer's Stone",
     eventCategory: "Film",
     venueName: "Cleveland",
     startTimeLabel: "11/14/25 8:00 PM",
@@ -714,7 +714,7 @@ const initialEvents: EventRecord[] = [
   },
   {
     id: "evt-008",
-    event: "Jurassic Park — Film + Live Score",
+    event: "Harry Potter and the Sorcerer's Stone",
     eventCategory: "Film + Live Score",
     venueName: "Atlanta",
     startTimeLabel: "11/21/25 7:00 PM",
@@ -762,7 +762,7 @@ const initialEvents: EventRecord[] = [
   },
   {
     id: "evt-009",
-    event: "The Godfather — 55th Anniversary Screening",
+    event: "Harry Potter and the Sorcerer's Stone",
     eventCategory: "Film",
     venueName: "Los Angeles",
     startTimeLabel: "12/05/25 6:30 PM",
