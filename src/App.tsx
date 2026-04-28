@@ -1,5 +1,7 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowDown,
   ArrowUp,
@@ -58,7 +60,8 @@ type SeatGroupEditableField = "name" | "currentPrice";
 type ViewRoute =
   | { type: "price-adjustment" }
   | { type: "seatmap"; eventId: string }
-  | { type: "reporting"; eventId: string };
+  | { type: "reporting"; eventId: string }
+  | { type: "mvp-view" };
 
 interface SeatGroup {
   id: string;
@@ -88,15 +91,25 @@ interface EventRecord {
   programReleaseDomeAtp: number | null;
   priceTier: string;
   priceTierOptions: string[];
+  eventHealth: number | null;
   domeAtp: number | null;
+  hallAtp: number | null;
+  gaAtp: number | null;
   recAtp: number | null;
   soldPct: number | null;
   domeProjectedSellthroughPct: number | null;
+  domeSold: number | null;
+  domeSoldProjected: number | null;
+  hallSold: number | null;
+  hallSoldProjected: number | null;
+  gaSold: number | null;
+  gaSoldProjected: number | null;
   hallSoldPct: number | null;
   daysRemaining: number | null;
   projectedRevenue: number | null;
   netTicketRevenue: number | null;
   projectedNetRevenue: number | null;
+  optimizedProjected: number | null;
   tof: number | null;
   funnelEntriesVsExpectedPct: number | null;
   fcrPct: number | null;
@@ -124,14 +137,24 @@ const initialEvents: EventRecord[] = [
     priceTier: "GSC S3",
     priceTierOptions: ["GSC S3", "GSC S2", "GSC E3", "Not Set"],
     domeAtp: 45.3,
+    eventHealth: 24,
+    hallAtp: 36.5,
+    gaAtp: 22.0,
     recAtp: 55,
     soldPct: 60,
     domeProjectedSellthroughPct: 60,
+    domeSold: 1840,
+    domeSoldProjected: 2100,
+    hallSold: 1260,
+    hallSoldProjected: 1450,
+    gaSold: 980,
+    gaSoldProjected: 1150,
     hallSoldPct: 60,
     daysRemaining: 14,
     projectedRevenue: 40000,
     netTicketRevenue: 15000,
     projectedNetRevenue: 15000,
+    optimizedProjected: 17200,
     tof: 12450,
     funnelEntriesVsExpectedPct: -12,
     fcrPct: 4.5,
@@ -213,14 +236,24 @@ const initialEvents: EventRecord[] = [
     priceTier: "GSC E3",
     priceTierOptions: ["GSC E3", "GSC E2", "GSC Club", "Not Set"],
     domeAtp: 45.3,
+    eventHealth: 72,
+    hallAtp: 36.5,
+    gaAtp: 22.0,
     recAtp: 55,
     soldPct: 60,
     domeProjectedSellthroughPct: 62,
+    domeSold: 1920,
+    domeSoldProjected: 2200,
+    hallSold: 1180,
+    hallSoldProjected: 1380,
+    gaSold: 890,
+    gaSoldProjected: 1050,
     hallSoldPct: 58,
     daysRemaining: 14,
     projectedRevenue: 40000,
     netTicketRevenue: 14850,
     projectedNetRevenue: 15425,
+    optimizedProjected: 17800,
     tof: 13780,
     funnelEntriesVsExpectedPct: -6,
     fcrPct: 4.2,
@@ -302,14 +335,24 @@ const initialEvents: EventRecord[] = [
     priceTier: "GSC E3",
     priceTierOptions: ["GSC E3", "GSC E2", "GSC Club", "Not Set"],
     domeAtp: 45.3,
+    eventHealth: 86,
+    hallAtp: 36.5,
+    gaAtp: 22.0,
     recAtp: 52,
     soldPct: 83,
     domeProjectedSellthroughPct: 86,
+    domeSold: 2650,
+    domeSoldProjected: 2900,
+    hallSold: 1580,
+    hallSoldProjected: 1750,
+    gaSold: 1320,
+    gaSoldProjected: 1500,
     hallSoldPct: 79,
     daysRemaining: 14,
     projectedRevenue: 42200,
     netTicketRevenue: 18125,
     projectedNetRevenue: 17680,
+    optimizedProjected: 19500,
     tof: 16890,
     funnelEntriesVsExpectedPct: 9,
     fcrPct: 5.1,
@@ -391,14 +434,24 @@ const initialEvents: EventRecord[] = [
     priceTier: "GSC E3",
     priceTierOptions: ["GSC E3", "GSC E2", "GSC Club", "Not Set"],
     domeAtp: 45.3,
+    eventHealth: 74,
+    hallAtp: 36.5,
+    gaAtp: 22.0,
     recAtp: 55,
     soldPct: 60,
     domeProjectedSellthroughPct: 64,
+    domeSold: 1760,
+    domeSoldProjected: 2050,
+    hallSold: 1140,
+    hallSoldProjected: 1320,
+    gaSold: 870,
+    gaSoldProjected: 1020,
     hallSoldPct: 57,
     daysRemaining: 14,
     projectedRevenue: 40000,
     netTicketRevenue: 15240,
     projectedNetRevenue: 15890,
+    optimizedProjected: 18100,
     tof: 14210,
     funnelEntriesVsExpectedPct: 3,
     fcrPct: 4.6,
@@ -480,14 +533,24 @@ const initialEvents: EventRecord[] = [
     priceTier: "Not Set",
     priceTierOptions: ["MTRX Floor", "MTRX Balcony", "Not Set"],
     domeAtp: null,
+    eventHealth: 18,
+    hallAtp: null,
+    gaAtp: null,
     recAtp: null,
     soldPct: null,
     domeProjectedSellthroughPct: null,
+    domeSold: null,
+    domeSoldProjected: null,
+    hallSold: null,
+    hallSoldProjected: null,
+    gaSold: null,
+    gaSoldProjected: null,
     hallSoldPct: null,
     daysRemaining: null,
     projectedRevenue: null,
     netTicketRevenue: null,
     projectedNetRevenue: null,
+    optimizedProjected: null,
     tof: null,
     funnelEntriesVsExpectedPct: null,
     fcrPct: null,
@@ -550,6 +613,346 @@ const initialEvents: EventRecord[] = [
         projectedRevenue: 225,
         yield: 126,
       },
+    ],
+  },
+  {
+    id: "evt-006",
+    event: "The Dark Knight — Film Screening",
+    eventCategory: "Film",
+    venueName: "Los Angeles",
+    startTimeLabel: "11/07/25 7:30 PM",
+    startTimeValue: new Date("2025-11-07T19:30:00").valueOf(),
+    weekdayLabel: "Friday",
+    localStartTimeLabel: "7:30 PM",
+    onSaleDateLabel: "10/01/25",
+    daysInMarket: 37,
+    salesWindowDays: 37,
+    programReleasePriceTier: "GSC E3",
+    programReleaseDomeAtp: 38,
+    priceTier: "GSC E3",
+    priceTierOptions: ["GSC E3", "GSC E2", "GSC S3", "Not Set"],
+    domeAtp: 42.1,
+    hallAtp: 33.8,
+    eventHealth: 79,
+    gaAtp: 20.5,
+    recAtp: 48,
+    soldPct: 74,
+    domeProjectedSellthroughPct: 78,
+    domeSold: 2280,
+    domeSoldProjected: 2600,
+    hallSold: 1420,
+    hallSoldProjected: 1650,
+    gaSold: 1150,
+    gaSoldProjected: 1340,
+    hallSoldPct: 71,
+    daysRemaining: 21,
+    projectedRevenue: 36500,
+    netTicketRevenue: 16200,
+    projectedNetRevenue: 16800,
+    optimizedProjected: 19300,
+    tof: 15340,
+    funnelEntriesVsExpectedPct: 5,
+    fcrPct: 4.8,
+    fcrVsExpectedPct: 12,
+    status: "On Sale" as const,
+    attention: null,
+    seatGroups: [
+      { id: "sg-26", name: "Orchestra", originalPrice: 48, currentPrice: 52, recTicketPrice: 58, soldPct: 82, ticketsRemaining: 10, projectedRevenue: 520, yield: 310 },
+      { id: "sg-27", name: "Mezzanine", originalPrice: 40, currentPrice: 44, recTicketPrice: 50, soldPct: 76, ticketsRemaining: 14, projectedRevenue: 440, yield: 268 },
+      { id: "sg-28", name: "Balcony", originalPrice: 32, currentPrice: 36, recTicketPrice: 42, soldPct: 68, ticketsRemaining: 20, projectedRevenue: 360, yield: 218 },
+      { id: "sg-29", name: "GA", originalPrice: 25, currentPrice: 28, recTicketPrice: 34, soldPct: 70, ticketsRemaining: 18, projectedRevenue: 280, yield: 175 },
+    ],
+  },
+  {
+    id: "evt-007",
+    event: "Interstellar — IMAX Experience",
+    eventCategory: "Film",
+    venueName: "Cleveland",
+    startTimeLabel: "11/14/25 8:00 PM",
+    startTimeValue: new Date("2025-11-14T20:00:00").valueOf(),
+    weekdayLabel: "Friday",
+    localStartTimeLabel: "8:00 PM",
+    onSaleDateLabel: "10/10/25",
+    daysInMarket: 35,
+    salesWindowDays: 35,
+    programReleasePriceTier: "GSC S2",
+    programReleaseDomeAtp: 52,
+    priceTier: "GSC S2",
+    priceTierOptions: ["GSC S2", "GSC S3", "GSC E3", "Not Set"],
+    domeAtp: 55.8,
+    hallAtp: 44.5,
+    eventHealth: 92,
+    gaAtp: 28.0,
+    recAtp: 62,
+    soldPct: 88,
+    domeProjectedSellthroughPct: 92,
+    domeSold: 3100,
+    domeSoldProjected: 3350,
+    hallSold: 1870,
+    hallSoldProjected: 2100,
+    gaSold: 1540,
+    gaSoldProjected: 1750,
+    hallSoldPct: 85,
+    daysRemaining: 28,
+    projectedRevenue: 52000,
+    netTicketRevenue: 24300,
+    projectedNetRevenue: 25100,
+    optimizedProjected: 28400,
+    tof: 21600,
+    funnelEntriesVsExpectedPct: 18,
+    fcrPct: 6.2,
+    fcrVsExpectedPct: 22,
+    status: "On Sale" as const,
+    attention: null,
+    seatGroups: [
+      { id: "sg-30", name: "IMAX Premium", originalPrice: 65, currentPrice: 70, recTicketPrice: 75, soldPct: 94, ticketsRemaining: 4, projectedRevenue: 700, yield: 420 },
+      { id: "sg-31", name: "Orchestra", originalPrice: 52, currentPrice: 58, recTicketPrice: 64, soldPct: 89, ticketsRemaining: 8, projectedRevenue: 580, yield: 345 },
+      { id: "sg-32", name: "Mezzanine", originalPrice: 44, currentPrice: 48, recTicketPrice: 55, soldPct: 85, ticketsRemaining: 11, projectedRevenue: 480, yield: 290 },
+      { id: "sg-33", name: "Balcony", originalPrice: 35, currentPrice: 39, recTicketPrice: 46, soldPct: 80, ticketsRemaining: 16, projectedRevenue: 390, yield: 234 },
+      { id: "sg-34", name: "GA", originalPrice: 28, currentPrice: 32, recTicketPrice: 38, soldPct: 82, ticketsRemaining: 12, projectedRevenue: 320, yield: 198 },
+    ],
+  },
+  {
+    id: "evt-008",
+    event: "Jurassic Park — Film + Live Score",
+    eventCategory: "Film + Live Score",
+    venueName: "Atlanta",
+    startTimeLabel: "11/21/25 7:00 PM",
+    startTimeValue: new Date("2025-11-21T19:00:00").valueOf(),
+    weekdayLabel: "Friday",
+    localStartTimeLabel: "7:00 PM",
+    onSaleDateLabel: "10/15/25",
+    daysInMarket: 22,
+    salesWindowDays: 37,
+    programReleasePriceTier: "GSC E2",
+    programReleaseDomeAtp: 46,
+    priceTier: "GSC E2",
+    priceTierOptions: ["GSC E2", "GSC E3", "GSC S3", "Not Set"],
+    domeAtp: 49.5,
+    hallAtp: 39.6,
+    eventHealth: 22,
+    gaAtp: 24.5,
+    recAtp: 56,
+    soldPct: 52,
+    domeProjectedSellthroughPct: 58,
+    domeSold: 1520,
+    domeSoldProjected: 1850,
+    hallSold: 960,
+    hallSoldProjected: 1180,
+    gaSold: 720,
+    gaSoldProjected: 880,
+    hallSoldPct: 48,
+    daysRemaining: 35,
+    projectedRevenue: 44200,
+    netTicketRevenue: 12800,
+    projectedNetRevenue: 14500,
+    optimizedProjected: 16800,
+    tof: 11900,
+    funnelEntriesVsExpectedPct: -4,
+    fcrPct: 3.9,
+    fcrVsExpectedPct: 2,
+    status: "On Sale" as const,
+    attention: "underperforming" as const,
+    seatGroups: [
+      { id: "sg-35", name: "Orchestra", originalPrice: 55, currentPrice: 55, recTicketPrice: 62, soldPct: 58, ticketsRemaining: 22, projectedRevenue: 550, yield: 320 },
+      { id: "sg-36", name: "Mezzanine", originalPrice: 45, currentPrice: 45, recTicketPrice: 52, soldPct: 50, ticketsRemaining: 28, projectedRevenue: 450, yield: 265 },
+      { id: "sg-37", name: "Balcony", originalPrice: 35, currentPrice: 35, recTicketPrice: 42, soldPct: 44, ticketsRemaining: 32, projectedRevenue: 350, yield: 210 },
+      { id: "sg-38", name: "GA", originalPrice: 28, currentPrice: 28, recTicketPrice: 34, soldPct: 48, ticketsRemaining: 26, projectedRevenue: 280, yield: 168 },
+    ],
+  },
+  {
+    id: "evt-009",
+    event: "The Godfather — 55th Anniversary Screening",
+    eventCategory: "Film",
+    venueName: "Los Angeles",
+    startTimeLabel: "12/05/25 6:30 PM",
+    startTimeValue: new Date("2025-12-05T18:30:00").valueOf(),
+    weekdayLabel: "Friday",
+    localStartTimeLabel: "6:30 PM",
+    onSaleDateLabel: "11/15/25",
+    daysInMarket: null,
+    salesWindowDays: 20,
+    programReleasePriceTier: "Not Set",
+    programReleaseDomeAtp: null,
+    priceTier: "Not Set",
+    priceTierOptions: ["GSC E3", "GSC E2", "GSC Club", "Not Set"],
+    domeAtp: null,
+    hallAtp: null,
+    eventHealth: 12,
+    gaAtp: null,
+    recAtp: null,
+    soldPct: null,
+    domeProjectedSellthroughPct: null,
+    domeSold: null,
+    domeSoldProjected: null,
+    hallSold: null,
+    hallSoldProjected: null,
+    gaSold: null,
+    gaSoldProjected: null,
+    hallSoldPct: null,
+    daysRemaining: null,
+    projectedRevenue: null,
+    netTicketRevenue: null,
+    projectedNetRevenue: null,
+    optimizedProjected: null,
+    tof: null,
+    funnelEntriesVsExpectedPct: null,
+    fcrPct: null,
+    fcrVsExpectedPct: null,
+    status: "Unpublished" as const,
+    attention: null,
+    seatGroups: [
+      { id: "sg-39", name: "Orchestra", originalPrice: 50, currentPrice: 50, recTicketPrice: 58, soldPct: 10, ticketsRemaining: 48, projectedRevenue: 500, yield: 290 },
+      { id: "sg-40", name: "Mezzanine", originalPrice: 40, currentPrice: 40, recTicketPrice: 47, soldPct: 8, ticketsRemaining: 52, projectedRevenue: 400, yield: 232 },
+      { id: "sg-41", name: "Balcony", originalPrice: 30, currentPrice: 30, recTicketPrice: 36, soldPct: 6, ticketsRemaining: 55, projectedRevenue: 300, yield: 174 },
+      { id: "sg-42", name: "GA", originalPrice: 22, currentPrice: 22, recTicketPrice: 28, soldPct: 5, ticketsRemaining: 60, projectedRevenue: 220, yield: 130 },
+    ],
+  },
+  {
+    id: "evt-010",
+    event: "Golden State Warriors vs. San Antonio Spurs",
+    eventCategory: "Sports",
+    venueName: "Los Angeles",
+    startTimeLabel: "10/25/25 7:00 PM",
+    startTimeValue: new Date("2025-10-25T19:00:00").valueOf(),
+    weekdayLabel: "Saturday",
+    localStartTimeLabel: "7:00 PM",
+    onSaleDateLabel: "09/15/25",
+    daysInMarket: 26,
+    salesWindowDays: 40,
+    programReleasePriceTier: "GSC S3",
+    programReleaseDomeAtp: 44,
+    priceTier: "GSC S3",
+    priceTierOptions: ["GSC S3", "GSC S2", "GSC E3", "Not Set"],
+    domeAtp: 48.2,
+    hallAtp: 38.5,
+    eventHealth: 70,
+    gaAtp: 23.5,
+    recAtp: 58,
+    soldPct: 67,
+    domeProjectedSellthroughPct: 72,
+    domeSold: 2060,
+    domeSoldProjected: 2350,
+    hallSold: 1280,
+    hallSoldProjected: 1480,
+    gaSold: 1040,
+    gaSoldProjected: 1220,
+    hallSoldPct: 64,
+    daysRemaining: 10,
+    projectedRevenue: 43800,
+    netTicketRevenue: 17600,
+    projectedNetRevenue: 18200,
+    optimizedProjected: 20600,
+    tof: 15800,
+    funnelEntriesVsExpectedPct: 2,
+    fcrPct: 4.4,
+    fcrVsExpectedPct: 7,
+    status: "On Sale" as const,
+    attention: null,
+    seatGroups: [
+      { id: "sg-43", name: "Sports A", originalPrice: 45, currentPrice: 50, recTicketPrice: 60, soldPct: 75, ticketsRemaining: 14, projectedRevenue: 500, yield: 298 },
+      { id: "sg-44", name: "Sports B", originalPrice: 42, currentPrice: 48, recTicketPrice: 58, soldPct: 68, ticketsRemaining: 18, projectedRevenue: 480, yield: 278 },
+      { id: "sg-45", name: "Sports C", originalPrice: 38, currentPrice: 42, recTicketPrice: 52, soldPct: 60, ticketsRemaining: 22, projectedRevenue: 420, yield: 248 },
+      { id: "sg-46", name: "Sports D", originalPrice: 35, currentPrice: 39, recTicketPrice: 48, soldPct: 55, ticketsRemaining: 20, projectedRevenue: 390, yield: 228 },
+      { id: "sg-47", name: "GA", originalPrice: 30, currentPrice: 34, recTicketPrice: 42, soldPct: 62, ticketsRemaining: 24, projectedRevenue: 340, yield: 205 },
+    ],
+  },
+  {
+    id: "evt-011",
+    event: "New York Knicks vs. Brooklyn Nets",
+    eventCategory: "Sports",
+    venueName: "Cleveland",
+    startTimeLabel: "11/01/25 3:00 PM",
+    startTimeValue: new Date("2025-11-01T15:00:00").valueOf(),
+    weekdayLabel: "Saturday",
+    localStartTimeLabel: "3:00 PM",
+    onSaleDateLabel: "09/20/25",
+    daysInMarket: 28,
+    salesWindowDays: 42,
+    programReleasePriceTier: "GSC E3",
+    programReleaseDomeAtp: 40,
+    priceTier: "GSC E3",
+    priceTierOptions: ["GSC E3", "GSC E2", "GSC Club", "Not Set"],
+    domeAtp: 43.7,
+    hallAtp: 34.9,
+    eventHealth: 27,
+    gaAtp: 21.0,
+    recAtp: 51,
+    soldPct: 55,
+    domeProjectedSellthroughPct: 60,
+    domeSold: 1680,
+    domeSoldProjected: 1950,
+    hallSold: 1040,
+    hallSoldProjected: 1220,
+    gaSold: 810,
+    gaSoldProjected: 960,
+    hallSoldPct: 52,
+    daysRemaining: 17,
+    projectedRevenue: 38400,
+    netTicketRevenue: 13900,
+    projectedNetRevenue: 14600,
+    optimizedProjected: 16500,
+    tof: 12500,
+    funnelEntriesVsExpectedPct: -8,
+    fcrPct: 3.7,
+    fcrVsExpectedPct: -2,
+    status: "On Sale" as const,
+    attention: "underperforming" as const,
+    seatGroups: [
+      { id: "sg-48", name: "Sports A", originalPrice: 42, currentPrice: 42, recTicketPrice: 52, soldPct: 58, ticketsRemaining: 22, projectedRevenue: 420, yield: 245 },
+      { id: "sg-49", name: "Sports B", originalPrice: 40, currentPrice: 40, recTicketPrice: 50, soldPct: 52, ticketsRemaining: 26, projectedRevenue: 400, yield: 232 },
+      { id: "sg-50", name: "Sports C", originalPrice: 37, currentPrice: 37, recTicketPrice: 46, soldPct: 48, ticketsRemaining: 28, projectedRevenue: 370, yield: 218 },
+      { id: "sg-51", name: "Sports D", originalPrice: 34, currentPrice: 34, recTicketPrice: 43, soldPct: 54, ticketsRemaining: 19, projectedRevenue: 340, yield: 202 },
+      { id: "sg-52", name: "GA", originalPrice: 28, currentPrice: 28, recTicketPrice: 36, soldPct: 50, ticketsRemaining: 30, projectedRevenue: 280, yield: 168 },
+    ],
+  },
+  {
+    id: "evt-012",
+    event: "Chicago Bulls vs. Milwaukee Bucks",
+    eventCategory: "Sports",
+    venueName: "Atlanta",
+    startTimeLabel: "11/08/25 6:00 PM",
+    startTimeValue: new Date("2025-11-08T18:00:00").valueOf(),
+    weekdayLabel: "Saturday",
+    localStartTimeLabel: "6:00 PM",
+    onSaleDateLabel: "09/25/25",
+    daysInMarket: 30,
+    salesWindowDays: 44,
+    programReleasePriceTier: "GSC S3",
+    programReleaseDomeAtp: 43,
+    priceTier: "GSC S3",
+    priceTierOptions: ["GSC S3", "GSC S2", "GSC E3", "Not Set"],
+    domeAtp: 46.9,
+    hallAtp: 37.5,
+    eventHealth: 83,
+    gaAtp: 23.0,
+    recAtp: 54,
+    soldPct: 71,
+    domeProjectedSellthroughPct: 76,
+    domeSold: 2180,
+    domeSoldProjected: 2480,
+    hallSold: 1360,
+    hallSoldProjected: 1580,
+    gaSold: 1100,
+    gaSoldProjected: 1300,
+    hallSoldPct: 68,
+    daysRemaining: 24,
+    projectedRevenue: 41500,
+    netTicketRevenue: 16700,
+    projectedNetRevenue: 17400,
+    optimizedProjected: 19800,
+    tof: 14900,
+    funnelEntriesVsExpectedPct: 7,
+    fcrPct: 5.0,
+    fcrVsExpectedPct: 11,
+    status: "On Sale" as const,
+    attention: null,
+    seatGroups: [
+      { id: "sg-53", name: "Sports A", originalPrice: 44, currentPrice: 49, recTicketPrice: 57, soldPct: 78, ticketsRemaining: 12, projectedRevenue: 490, yield: 288 },
+      { id: "sg-54", name: "Sports B", originalPrice: 41, currentPrice: 46, recTicketPrice: 54, soldPct: 72, ticketsRemaining: 16, projectedRevenue: 460, yield: 270 },
+      { id: "sg-55", name: "Sports C", originalPrice: 38, currentPrice: 42, recTicketPrice: 50, soldPct: 65, ticketsRemaining: 20, projectedRevenue: 420, yield: 248 },
+      { id: "sg-56", name: "Sports D", originalPrice: 36, currentPrice: 40, recTicketPrice: 48, soldPct: 68, ticketsRemaining: 15, projectedRevenue: 400, yield: 238 },
+      { id: "sg-57", name: "GA", originalPrice: 30, currentPrice: 34, recTicketPrice: 41, soldPct: 64, ticketsRemaining: 22, projectedRevenue: 340, yield: 205 },
     ],
   },
 ];
@@ -679,6 +1082,18 @@ function projectSellthroughMetric(
   return roundTo(clamp(actualPct + projectionLift * multiplier, 0, 100), 1);
 }
 
+function getVenueTimezone(venueName: string): string {
+  const map: Record<string, string> = {
+    "Los Angeles": "PST",
+    "Cleveland": "EST",
+    "Atlanta": "EST",
+    "New York": "EST",
+    "Chicago": "CST",
+    "Golden State": "PST",
+  };
+  return map[venueName] ?? "";
+}
+
 function getSeatGroupByName(event: EventRecord, seatGroupName: string): SeatGroup | undefined {
   return event.seatGroups.find(
     (seatGroup) => seatGroup.name.trim().toLowerCase() === seatGroupName.trim().toLowerCase(),
@@ -725,14 +1140,6 @@ function getNetTicketRevenueBreakdown(event: EventRecord): {
   };
 }
 
-function RealtimeColumnLabel({ children }: { children: string }) {
-  return (
-    <span className="inline-flex whitespace-nowrap rounded-md bg-warning/20 px-2 py-1 font-semibold text-foreground ring-1 ring-warning/35">
-      {children}
-    </span>
-  );
-}
-
 function parseRoute(pathname: string): ViewRoute {
   const seatmapMatch = pathname.match(/^\/seatmap\/([^/]+)\/?$/);
   if (seatmapMatch) {
@@ -742,6 +1149,10 @@ function parseRoute(pathname: string): ViewRoute {
   const reportingMatch = pathname.match(/^\/reporting\/([^/]+)\/?$/);
   if (reportingMatch) {
     return { type: "reporting", eventId: decodeURIComponent(reportingMatch[1]) };
+  }
+
+  if (pathname === "/mvp") {
+    return { type: "mvp-view" };
   }
 
   return { type: "price-adjustment" };
@@ -793,16 +1204,124 @@ function calculatePendingChanges(publishedEvents: EventRecord[], draftEvents: Ev
   };
 }
 
-function attentionBadge(attention: AttentionFlag) {
-  if (attention === "underperforming") {
-    return (
-      <Badge variant="warning" className="ml-1.5 shrink-0 whitespace-nowrap">
-        Needs Attention
-      </Badge>
-    );
+function getAttentionReasons(event: EventRecord): { metric: string; detail: string }[] {
+  const reasons: { metric: string; detail: string }[] = [];
+
+  if (event.soldPct !== null && event.soldPct < 55) {
+    reasons.push({ metric: "Sell-Through", detail: `${event.soldPct}% sold — below the 55% target` });
   }
 
-  return null;
+  if (event.funnelEntriesVsExpectedPct !== null && event.funnelEntriesVsExpectedPct < -5) {
+    reasons.push({ metric: "Funnel Entries", detail: `${event.funnelEntriesVsExpectedPct}% vs. expected — demand is trailing` });
+  }
+
+  if (event.fcrVsExpectedPct !== null && event.fcrVsExpectedPct < 0) {
+    reasons.push({ metric: "Conversion Rate", detail: `FCR is ${event.fcrVsExpectedPct}% vs. expected` });
+  }
+
+  if (event.netTicketRevenue !== null && event.projectedNetRevenue !== null && event.netTicketRevenue < event.projectedNetRevenue * 0.8) {
+    reasons.push({ metric: "Net Revenue", detail: `${formatCurrency(event.netTicketRevenue)} actual vs. ${formatCurrency(event.projectedNetRevenue)} projected` });
+  }
+
+  if (event.daysRemaining !== null && event.daysRemaining <= 14 && event.soldPct !== null && event.soldPct < 65) {
+    reasons.push({ metric: "Time Pressure", detail: `Only ${event.daysRemaining} days left with ${event.soldPct}% sold` });
+  }
+
+  if (reasons.length === 0) {
+    reasons.push({ metric: "Performance", detail: "Overall metrics are below expectations" });
+  }
+
+  return reasons;
+}
+
+function getAttentionSummary(event: EventRecord): string {
+  const soldPct = event.soldPct ?? 0;
+  const funnelGap = event.funnelEntriesVsExpectedPct ?? 0;
+  const daysLeft = event.daysRemaining;
+
+  if (daysLeft !== null && daysLeft <= 14 && soldPct < 55) {
+    return `This event is at risk — low sell-through with only ${daysLeft} days remaining; consider a price adjustment to drive demand.`;
+  }
+  if (funnelGap < -10) {
+    return "Demand is significantly below expectations; a pricing or promotional adjustment may be needed to recover momentum.";
+  }
+  if (soldPct < 50) {
+    return "Sell-through is well below target; review pricing strategy and consider recommendations to improve ticket velocity.";
+  }
+  return "Multiple performance indicators are trailing expectations; review pricing and demand metrics for this event.";
+}
+
+function attentionBadge(event: EventRecord) {
+  if (event.attention !== "underperforming") {
+    return null;
+  }
+
+  const reasons = getAttentionReasons(event);
+  const summary = getAttentionSummary(event);
+
+  return (
+    <span className="group/attn relative ml-1.5 shrink-0">
+      <span className="inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full bg-warning/15 text-warning">
+        <AlertTriangle className="h-3.5 w-3.5" />
+      </span>
+      <div className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 w-[320px] rounded-lg border border-border/80 bg-card p-3 opacity-0 shadow-xl transition-opacity group-hover/attn:pointer-events-auto group-hover/attn:opacity-100">
+        <p className="mb-2 text-xs font-semibold text-foreground">Flagged Metrics</p>
+        <ul className="space-y-1.5">
+          {reasons.map((r) => (
+            <li key={r.metric} className="flex items-start gap-2 text-xs">
+              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
+              <span>
+                <span className="font-medium text-foreground">{r.metric}:</span>{" "}
+                <span className="text-muted-foreground">{r.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2.5 border-t border-border/60 pt-2 text-xs leading-relaxed text-muted-foreground">
+          {summary}
+        </p>
+      </div>
+    </span>
+  );
+}
+
+function EventHealthBadge({ score }: { score: number | null }) {
+  if (score === null) return <span className="text-muted-foreground text-sm">--</span>;
+  const { bg, text, ring } =
+    score >= 76
+      ? { bg: "bg-emerald-100", text: "text-emerald-700", ring: "ring-1 ring-emerald-300" }
+      : score >= 51
+      ? { bg: "bg-blue-100", text: "text-blue-700", ring: "ring-1 ring-blue-300" }
+      : score >= 26
+      ? { bg: "bg-amber-100", text: "text-amber-700", ring: "ring-1 ring-amber-300" }
+      : { bg: "bg-red-100", text: "text-red-700", ring: "ring-1 ring-red-300" };
+  return (
+    <div
+      className={cn(
+        "inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-normal",
+        bg, text, ring,
+      )}
+    >
+      {score}
+    </div>
+  );
+}
+
+function SellThroughBar({ pct, compact = false }: { pct: number | null; compact?: boolean }) {
+  if (pct === null) return <span>--</span>;
+  const barColor = pct >= 75 ? "bg-success" : pct >= 51 ? "bg-primary" : "bg-warning";
+  const textColor = pct < 50 ? "text-destructive" : "";
+  return (
+    <div className="flex flex-col items-center gap-2.5">
+      <span className={textColor}>{formatPercent(pct)}</span>
+      <div className={cn("h-1.5 rounded-full bg-border/25", compact ? "w-[52px]" : "w-full")}>
+        <div
+          className={cn("h-full rounded-full transition-all duration-300", barColor)}
+          style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+        />
+      </div>
+    </div>
+  );
 }
 
 function PublishedOverlay({ visible }: { visible: boolean }) {
@@ -843,7 +1362,7 @@ function DraftActionFooter({
   const scopeSuffix = scopeLabel ? ` ${scopeLabel}` : "";
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-[70] border-t border-border/60 bg-card/98 backdrop-blur-sm">
+    <footer className="fixed inset-x-0 bottom-0 z-[70] border-t border-border/60 bg-white">
       <div className="mx-auto flex max-w-[1450px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2">
           <div className={cn("h-1.5 w-1.5 rounded-full", hasChanges ? "bg-warning" : "bg-muted-foreground/30")} />
@@ -863,7 +1382,7 @@ function DraftActionFooter({
             Discard Draft
           </Button>
           <Button onClick={onPublish} disabled={!hasChanges} className={cn(!hasChanges && "opacity-40")}>
-            {hasChanges ? `Publish ${stagedCount} Change${stagedCount === 1 ? "" : "s"}` : "Publish Changes"}
+            {hasChanges ? `Review ${stagedCount} Change${stagedCount === 1 ? "" : "s"}` : "Review Changes"}
           </Button>
         </div>
       </div>
@@ -970,6 +1489,15 @@ interface PublishFieldChange {
   fieldLabel: string;
   previousValue: string;
   nextValue: string;
+  rawNextValue: string | number | null;
+  recommendedValue?: string;
+  inputType: "number" | "text";
+  changeKey: string;
+  target:
+    | { type: "event-price-tier"; eventId: string }
+    | { type: "event-dome-atp"; eventId: string }
+    | { type: "seat-group-name"; eventId: string; seatGroupId: string }
+    | { type: "seat-group-current-price"; eventId: string; seatGroupId: string };
 }
 
 interface PublishChangeRow {
@@ -1016,8 +1544,8 @@ type NumericBulkEditMode = "set" | "flat" | "percent";
 
 const numericBulkEditModes: { value: NumericBulkEditMode; label: string }[] = [
   { value: "set", label: "Set value" },
-  { value: "flat", label: "Increase by amount" },
-  { value: "percent", label: "Increase by %" },
+  { value: "flat", label: "Edit by amount" },
+  { value: "percent", label: "Edit by percent" },
 ];
 
 function formatPublishValue(value: number | string | null) {
@@ -1074,6 +1602,10 @@ function buildPublishChangeRows(
         fieldLabel: "Price Tier",
         previousValue: formatPublishValue(publishedEvent.priceTier),
         nextValue: formatPublishValue(draftEvent.priceTier),
+        rawNextValue: draftEvent.priceTier,
+        inputType: "text",
+        changeKey: `event-price-tier-${draftEvent.id}`,
+        target: { type: "event-price-tier", eventId: draftEvent.id },
       });
     }
 
@@ -1082,6 +1614,10 @@ function buildPublishChangeRows(
         fieldLabel: "Dome ATP",
         previousValue: formatPublishValue(publishedEvent.domeAtp),
         nextValue: formatPublishValue(draftEvent.domeAtp),
+        rawNextValue: draftEvent.domeAtp,
+        inputType: "number",
+        changeKey: `event-dome-atp-${draftEvent.id}`,
+        target: { type: "event-dome-atp", eventId: draftEvent.id },
       });
     }
 
@@ -1111,6 +1647,10 @@ function buildPublishChangeRows(
           fieldLabel: "Seat Group",
           previousValue: formatPublishValue(publishedSeatGroup.name),
           nextValue: formatPublishValue(draftSeatGroup.name),
+          rawNextValue: draftSeatGroup.name,
+          inputType: "text",
+          changeKey: `seat-group-name-${draftEvent.id}-${draftSeatGroup.id}`,
+          target: { type: "seat-group-name", eventId: draftEvent.id, seatGroupId: draftSeatGroup.id },
         });
       }
 
@@ -1119,14 +1659,19 @@ function buildPublishChangeRows(
           fieldLabel: "Current Price",
           previousValue: formatPublishValue(publishedSeatGroup.currentPrice),
           nextValue: formatPublishValue(draftSeatGroup.currentPrice),
+          rawNextValue: draftSeatGroup.currentPrice,
+          recommendedValue: formatPublishValue(draftSeatGroup.recTicketPrice),
+          inputType: "number",
+          changeKey: `seat-group-current-price-${draftEvent.id}-${draftSeatGroup.id}`,
+          target: { type: "seat-group-current-price", eventId: draftEvent.id, seatGroupId: draftSeatGroup.id },
         });
       }
 
       if (seatGroupChanges.length > 0) {
         changeRows.push({
           id: `seat-group-${draftEvent.id}-${draftSeatGroup.id}`,
-          rowLabel: draftSeatGroup.name,
-          contextLabel: `${draftEvent.event} / Seat Group`,
+          rowLabel: draftEvent.event,
+          contextLabel: `${draftSeatGroup.name} / Seat Group`,
           changes: seatGroupChanges,
         });
       }
@@ -1145,53 +1690,105 @@ function PublishConfirmationModal({
   open: boolean;
   changeRows: PublishChangeRow[];
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (edits: Record<string, string>) => void;
 }) {
+  const [editedValues, setEditedValues] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    const initial: Record<string, string> = {};
+    for (const row of changeRows) {
+      for (const change of row.changes) {
+        initial[change.changeKey] = change.rawNextValue === null ? "" : String(change.rawNextValue);
+      }
+    }
+    setEditedValues(initial);
+  }, [open]);
+
   if (!open) {
     return null;
   }
 
   const fieldChangeCount = changeRows.reduce((total, row) => total + row.changes.length, 0);
 
+  // Group rows by event name
+  const eventGroups = new Map<string, PublishChangeRow[]>();
+  for (const row of changeRows) {
+    if (!eventGroups.has(row.rowLabel)) eventGroups.set(row.rowLabel, []);
+    eventGroups.get(row.rowLabel)!.push(row);
+  }
+
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
-      <div className="max-h-[85vh] w-full max-w-4xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
+      <div className="max-h-[85vh] w-full max-w-5xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
         <div className="border-b px-6 py-4">
           <h2 className="font-heading text-xl font-semibold text-foreground">Confirm Publish Changes</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review {changeRows.length} edited row{changeRows.length === 1 ? "" : "s"} across{" "}
-            {fieldChangeCount} field change{fieldChangeCount === 1 ? "" : "s"} before publishing.
+            Review {fieldChangeCount} field change{fieldChangeCount === 1 ? "" : "s"} across{" "}
+            {eventGroups.size} event{eventGroups.size === 1 ? "" : "s"} before publishing.
           </p>
         </div>
 
-        <div className="max-h-[58vh] space-y-4 overflow-y-auto px-6 py-5">
-          {changeRows.map((row) => (
-            <div key={row.id} className="rounded-xl border border-border/70 bg-secondary/15 p-4">
-              <div className="mb-3">
-                <p className="text-sm font-medium text-foreground">{row.rowLabel}</p>
-                <p className="text-xs text-muted-foreground">{row.contextLabel}</p>
+        <div className="max-h-[62vh] space-y-5 overflow-y-auto px-6 py-5">
+          {Array.from(eventGroups.entries()).map(([eventName, rows]) => (
+            <div key={eventName} className="rounded-xl border border-border/70 overflow-hidden">
+              {/* Event header */}
+              <div className="bg-secondary/30 px-4 py-2.5 border-b border-border/60">
+                <p className="text-sm font-semibold text-foreground">{eventName}</p>
               </div>
 
-              <div className="space-y-2">
-                {row.changes.map((change) => (
-                  <div
-                    key={`${row.id}-${change.fieldLabel}`}
-                    className="grid gap-2 rounded-lg border border-border/60 bg-card px-3 py-2 sm:grid-cols-[140px,1fr,1fr]"
-                  >
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {change.fieldLabel}
-                    </p>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Old</p>
-                      <p className="text-sm text-foreground">{change.previousValue}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">New</p>
-                      <p className="text-sm font-medium text-foreground">{change.nextValue}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {/* Table */}
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/50 bg-secondary/10">
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-[160px]">Seat Group</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-[130px]">Field</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-[120px]">Previous</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-[120px]">Recommended</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">New Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) =>
+                    row.changes.map((change, i) => (
+                      <tr
+                        key={`${row.id}-${change.fieldLabel}`}
+                        className="border-b border-border/40 last:border-0 hover:bg-muted/20"
+                      >
+                        {i === 0 && (
+                          <td
+                            className="px-4 py-3 text-sm text-foreground align-top"
+                            rowSpan={row.changes.length}
+                          >
+                            {row.contextLabel === "Event" ? (
+                              <span className="text-muted-foreground italic">Event</span>
+                            ) : (
+                              row.contextLabel.replace(" / Seat Group", "")
+                            )}
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-sm text-muted-foreground">{change.fieldLabel}</td>
+                        <td className="px-4 py-3 text-sm text-foreground">{change.previousValue}</td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {change.recommendedValue ?? <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Input
+                            type={change.inputType}
+                            min={change.inputType === "number" ? "0" : undefined}
+                            step={change.inputType === "number" ? "0.01" : undefined}
+                            value={editedValues[change.changeKey] ?? ""}
+                            onChange={(e) =>
+                              setEditedValues((prev) => ({ ...prev, [change.changeKey]: e.target.value }))
+                            }
+                            className="h-8 w-[120px] bg-background text-sm font-medium"
+                          />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           ))}
         </div>
@@ -1200,10 +1797,188 @@ function PublishConfirmationModal({
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={onConfirm}>Confirm Publish</Button>
+          <Button onClick={() => onConfirm(editedValues)}>Confirm Publish</Button>
         </div>
       </div>
     </div>
+  );
+}
+
+function BulkEditEventsModal({
+  open,
+  selectedEvents,
+  sharedFields,
+  summaries,
+  values,
+  modes,
+  readyFields,
+  onClose,
+  onSetValue,
+  onSetMode,
+  onApply,
+  onPublish,
+}: {
+  open: boolean;
+  selectedEvents: EventRecord[];
+  sharedFields: EventBulkEditOption[];
+  summaries: Record<string, EventBulkFieldSummary>;
+  values: Record<string, string>;
+  modes: Record<string, NumericBulkEditMode>;
+  readyFields: EventBulkEditOption[];
+  onClose: () => void;
+  onSetValue: (field: EventEditableField, value: string) => void;
+  onSetMode: (field: EventEditableField, mode: NumericBulkEditMode) => void;
+  onApply: () => void;
+  onPublish: () => void;
+}) {
+  if (!open) return null;
+
+  function getReferencedEvents(field: EventBulkEditOption): EventRecord[] {
+    if (field.value === "domeAtp" || field.value === "priceTier") return selectedEvents;
+    const seatGroupName = field.value.replace("seatGroup:", "");
+    return selectedEvents.filter((e) => getSeatGroupByName(e, seatGroupName) !== undefined);
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
+      <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
+        {/* Header */}
+        <div className="border-b px-6 py-4">
+          <h2 className="font-heading text-xl font-semibold text-foreground">Bulk Edit Events</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Editing shared fields across {selectedEvents.length} selected event{selectedEvents.length === 1 ? "" : "s"}.
+          </p>
+        </div>
+
+        {/* Table */}
+        <div className="max-h-[62vh] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/50 bg-secondary/10">
+                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Field</th>
+                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Current</th>
+                <th className="w-[180px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Mode</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">New Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(["seatGroup"] as const).map((group) => {
+                const fields = sharedFields.filter((f) => f.group === group);
+                if (fields.length === 0) return null;
+                return (
+                  <Fragment key={group}>
+                    <tr className="border-b border-border/40 bg-secondary/10">
+                      <td colSpan={4} className="px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        {"Seat Groups"}
+                      </td>
+                    </tr>
+                    {fields.map((field) => {
+                      const summary = summaries[field.value] ?? { valueLabel: "--" };
+                      const fieldValue = values[field.value] ?? "";
+                      const fieldMode = modes[field.value] ?? "set";
+                      const referencedEvents = getReferencedEvents(field);
+
+                      return (
+                        <tr key={field.value} className="border-b border-border/40 last:border-0 align-top hover:bg-muted/20">
+                          {/* Field name */}
+                          <td className="px-4 py-3 font-medium text-foreground">{field.label}</td>
+
+                          {/* Current value + hover tooltip */}
+                          <td className="px-4 py-3">
+                            <p className={cn("text-sm text-foreground", summary.isMixed && "text-muted-foreground")}>
+                              {summary.valueLabel}
+                            </p>
+                            {summary.detailLabel && (
+                              <div className="group relative mt-0.5 inline-block">
+                                <span className="cursor-help text-xs text-muted-foreground underline decoration-dotted underline-offset-2">
+                                  {summary.detailLabel}
+                                </span>
+                                <div className="pointer-events-none absolute left-0 top-full z-30 mt-1.5 min-w-[200px] rounded-lg border border-border/80 bg-card p-2.5 shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">Events</p>
+                                  <ul className="space-y-1">
+                                    {referencedEvents.map((e) => (
+                                      <li key={e.id} className="text-xs leading-snug text-foreground">{e.event}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Mode selector */}
+                          <td className="px-4 py-3">
+                            {field.inputType === "number" ? (
+                              <Select value={fieldMode} onValueChange={(next) => onSetMode(field.value, next as NumericBulkEditMode)}>
+                                <SelectTrigger className="h-8 w-full bg-background">
+                                  <SelectValue placeholder="Mode" />
+                                </SelectTrigger>
+                                <SelectContent className="!z-[200]">
+                                  {numericBulkEditModes.map((mode) => (
+                                    <SelectItem key={mode.value} value={mode.value}>{mode.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+
+                          {/* New value input */}
+                          <td className="px-4 py-3">
+                            {field.inputType === "select" ? (
+                              <Select value={fieldValue} onValueChange={(next) => onSetValue(field.value, next)}>
+                                <SelectTrigger className="h-8 w-full bg-background">
+                                  <SelectValue placeholder="Select value" />
+                                </SelectTrigger>
+                                <SelectContent className="!z-[200]">
+                                  {(field.selectOptions ?? []).map((option) => (
+                                    <SelectItem key={option} value={option}>{option}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                value={fieldValue}
+                                onChange={(e) => onSetValue(field.value, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") onApply();
+                                  if (e.key === "Escape") onClose();
+                                }}
+                                className="h-8 w-full bg-background"
+                                placeholder={
+                                  fieldMode === "percent" ? "Enter %" :
+                                  fieldMode === "flat" ? "Enter Amount" :
+                                  "Set value"
+                                }
+                              />
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t px-6 py-4">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="secondary" onClick={onApply} disabled={readyFields.length === 0}>
+            Apply Changes
+          </Button>
+          <Button onClick={onPublish} disabled={readyFields.length === 0}>
+            Publish Changes
+          </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1976,6 +2751,21 @@ function formatCompactDateTime(value: number): string {
   }).format(value);
 }
 
+function formatStartDate(value: number): string {
+  const d = new Date(value);
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+function formatStartTime(value: number): string {
+  const d = new Date(value);
+  const hours = d.getHours();
+  const minutes = d.getMinutes();
+  const ampm = hours >= 12 ? "PM" : "AM";
+  const h = hours % 12 || 12;
+  const m = minutes.toString().padStart(2, "0");
+  return `${h}:${m}${ampm}`;
+}
+
 function formatDollarInteger(value: number): string {
   return `$${value.toLocaleString("en-US")}`;
 }
@@ -2176,6 +2966,12 @@ function EventRoutePlaceholder({
       </main>
     </div>
   );
+}
+
+function computeSgTicketsSold(sg: SeatGroup): number | null {
+  if (sg.soldPct <= 0) return 0;
+  if (sg.soldPct >= 100) return null;
+  return Math.round((sg.ticketsRemaining * sg.soldPct) / (100 - sg.soldPct));
 }
 
 function EventReportingDashboard({
@@ -2849,7 +3645,7 @@ function EventReportingDashboard({
               <span className="font-semibold">Start Time:</span> {startTimeLabel}
             </span>
             <span>
-              <span className="font-semibold">Local Time:</span> {event.localStartTimeLabel}
+              <span className="font-semibold">Local Time:</span> {event.localStartTimeLabel} {getVenueTimezone(event.venueName)}
             </span>
             <span>
               <span className="font-semibold">On-Sale Date:</span> {event.onSaleDateLabel}
@@ -3499,14 +4295,14 @@ function EventReportingDashboard({
                       {reportingYieldRows.map((row) => (
                         <TableRow key={row.id}>
                           <TableCell>{row.ticketsSold}</TableCell>
-                          <TableCell>{row.sellThroughPct}%</TableCell>
+                          <TableCell><SellThroughBar pct={row.sellThroughPct} /></TableCell>
                           <TableCell>{formatDollarInteger(row.yield)}</TableCell>
                           <TableCell>{formatDollarInteger(row.grossYield)}</TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-secondary/30 font-semibold">
                         <TableCell>{yieldTotals.ticketsSold}</TableCell>
-                        <TableCell>{yieldTotals.sellThroughPct}%</TableCell>
+                        <TableCell><SellThroughBar pct={yieldTotals.sellThroughPct} /></TableCell>
                         <TableCell>{formatDollarInteger(yieldTotals.yield)}</TableCell>
                         <TableCell>{formatDollarInteger(yieldTotals.grossYield)}</TableCell>
                       </TableRow>
@@ -3675,7 +4471,7 @@ function EventReportingDashboard({
                                 </button>
                               )}
                             </TableCell>
-                            <TableCell>{row.soldPct !== null ? `${row.soldPct}%` : "--"}</TableCell>
+                            <TableCell><SellThroughBar pct={row.soldPct} /></TableCell>
                             <TableCell>{row.ticketsLeft !== null ? row.ticketsLeft : "--"}</TableCell>
                             <TableCell>{row.yield !== null ? formatDollarInteger(row.yield) : "--"}</TableCell>
                             <TableCell>
@@ -3832,6 +4628,10 @@ export default function App() {
   const [draftEvents, setDraftEvents] = useState<EventRecord[]>(() => cloneEvents(initialEvents));
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterValue>("all");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [daypartFilter, setDaypartFilter] = useState<string>("all");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set(["evt-001"]));
   const [sortState, setSortState] = useState<{ key: SortKey; direction: "asc" | "desc" }>({
     key: "startTime",
@@ -3845,6 +4645,8 @@ export default function App() {
     Record<string, NumericBulkEditMode>
   >({});
   const [showEventBulkEditOverlay, setShowEventBulkEditOverlay] = useState(false);
+  const eventBulkEditBtnRef = useRef<HTMLButtonElement>(null);
+  const seatBulkEditBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const [editingSeatCell, setEditingSeatCell] = useState<{
     eventId: string;
     seatGroupId: string;
@@ -4066,6 +4868,29 @@ export default function App() {
       }
 
       return event.status === "Unpublished";
+    }).filter((event) => {
+      // Location filter
+      if (locationFilter !== "all" && event.venueName !== locationFilter) return false;
+
+      // Date range filter
+      if (dateFrom) {
+        const fromMs = new Date(dateFrom + "T00:00:00").valueOf();
+        if (event.startTimeValue < fromMs) return false;
+      }
+      if (dateTo) {
+        const toMs = new Date(dateTo + "T23:59:59").valueOf();
+        if (event.startTimeValue > toMs) return false;
+      }
+
+      // Daypart filter
+      if (daypartFilter !== "all") {
+        const hour = new Date(event.startTimeValue).getHours();
+        if (daypartFilter === "morning" && hour >= 12) return false;
+        if (daypartFilter === "afternoon" && (hour < 12 || hour >= 17)) return false;
+        if (daypartFilter === "evening" && hour < 17) return false;
+      }
+
+      return true;
     });
 
     const sorted = [...filtered].sort((a, b) => {
@@ -4093,7 +4918,7 @@ export default function App() {
     });
 
     return sorted;
-  }, [draftEvents, searchTerm, statusFilter, sortState]);
+  }, [draftEvents, searchTerm, statusFilter, locationFilter, dateFrom, dateTo, daypartFilter, sortState]);
   const recommendedReviewChangeRows = useMemo<RecommendedReviewChangeRow[]>(
     () =>
       draftEvents.flatMap((event) =>
@@ -4105,8 +4930,8 @@ export default function App() {
           return [
             {
               id: `draft-seat-group-price-${event.id}-${seatGroup.id}`,
-              rowLabel: seatGroup.name,
-              contextLabel: event.event,
+              rowLabel: event.event,
+              contextLabel: seatGroup.name,
               currentValue: seatGroup.currentPrice,
               suggestedValue: seatGroup.recTicketPrice,
               format: "currency" as const,
@@ -4123,6 +4948,76 @@ export default function App() {
       ),
     [draftEvents],
   );
+
+  const scopedRecommendations = useMemo(() => {
+    const scopeEventIds =
+      selectedEventIds.length > 0 ? selectedEventIds : draftEvents.map((e) => e.id);
+    return draftEvents
+      .filter((e) => scopeEventIds.includes(e.id))
+      .flatMap((event) =>
+        event.seatGroups
+          .filter((sg) => !arePriceValuesEqual(sg.recTicketPrice, sg.currentPrice))
+          .map((sg) => ({ eventId: event.id, seatGroupId: sg.id, currentPrice: sg.currentPrice, recPrice: sg.recTicketPrice })),
+      );
+  }, [draftEvents, selectedEventIds]);
+
+  const filterTabCounts = useMemo(
+    () => ({
+      all: draftEvents.length,
+      attention: draftEvents.filter((e) => e.attention !== null).length,
+      "on-sale": draftEvents.filter((e) => e.status === "On Sale").length,
+      unpublished: draftEvents.filter((e) => e.status === "Unpublished").length,
+    }),
+    [draftEvents],
+  );
+
+  const uniqueLocations = useMemo(
+    () => Array.from(new Set(draftEvents.map((e) => e.venueName))).sort(),
+    [draftEvents],
+  );
+
+  const activeFilterCount = [
+    locationFilter !== "all",
+    dateFrom !== "",
+    dateTo !== "",
+    daypartFilter !== "all",
+  ].filter(Boolean).length;
+
+  function clearAllFilters() {
+    setLocationFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setDaypartFilter("all");
+  }
+
+  const applyAllRecommendations = useCallback(() => {
+    if (scopedRecommendations.length === 0) return;
+
+    // Store undo entries for all recommendations
+    setDraftSeatRecommendationUndoById((current) => {
+      const next = { ...current };
+      for (const rec of scopedRecommendations) {
+        next[`${rec.eventId}:${rec.seatGroupId}`] = rec.currentPrice;
+      }
+      return next;
+    });
+
+    // Apply all recommended prices in one batch
+    setDraftEvents((current) =>
+      current.map((event) => {
+        const eventRecs = scopedRecommendations.filter((r) => r.eventId === event.id);
+        if (eventRecs.length === 0) return event;
+        return {
+          ...event,
+          seatGroups: event.seatGroups.map((sg) => {
+            const rec = eventRecs.find((r) => r.seatGroupId === sg.id);
+            return rec ? { ...sg, currentPrice: rec.recPrice } : sg;
+          }),
+        };
+      }),
+    );
+  }, [scopedRecommendations]);
+
   const visibleEventIds = useMemo(
     () => filteredAndSortedEvents.map((event) => event.id),
     [filteredAndSortedEvents],
@@ -4782,12 +5677,42 @@ export default function App() {
     setShowPublishConfirmation(true);
   };
 
-  const onConfirmPublishChanges = () => {
+  const onConfirmPublishChanges = (edits: Record<string, string>) => {
     if (pendingChanges.total === 0) {
       return;
     }
 
-    setPublishedEvents(cloneEvents(draftEvents));
+    let updatedDraft = cloneEvents(draftEvents);
+    for (const row of publishChangeRows) {
+      for (const change of row.changes) {
+        const editedValue = edits[change.changeKey];
+        if (editedValue === undefined) continue;
+        const target = change.target;
+        if (target.type === "event-price-tier") {
+          const event = updatedDraft.find((e) => e.id === target.eventId);
+          if (event) event.priceTier = editedValue;
+        } else if (target.type === "event-dome-atp") {
+          const event = updatedDraft.find((e) => e.id === target.eventId);
+          if (event) {
+            const parsed = parseFloat(editedValue);
+            event.domeAtp = editedValue === "" ? null : isNaN(parsed) ? event.domeAtp : parsed;
+          }
+        } else if (target.type === "seat-group-name") {
+          const event = updatedDraft.find((e) => e.id === target.eventId);
+          const sg = event?.seatGroups.find((s) => s.id === target.seatGroupId);
+          if (sg) sg.name = editedValue;
+        } else if (target.type === "seat-group-current-price") {
+          const event = updatedDraft.find((e) => e.id === target.eventId);
+          const sg = event?.seatGroups.find((s) => s.id === target.seatGroupId);
+          if (sg) {
+            const parsed = parseFloat(editedValue);
+            if (!isNaN(parsed) && parsed >= 0) sg.currentPrice = parsed;
+          }
+        }
+      }
+    }
+    setDraftEvents(updatedDraft);
+    setPublishedEvents(cloneEvents(updatedDraft));
     setEditingEventId(null);
     setEditingEventValue("");
     setSelectedEventIds([]);
@@ -4858,6 +5783,516 @@ export default function App() {
     );
   };
 
+  if (route.type === "mvp-view") {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(9,119,180,0.12),_transparent_42%),linear-gradient(180deg,_hsl(210_33%_98%)_0%,_hsl(210_30%_95%)_100%)] px-4 py-8 pb-28 sm:px-6 lg:px-8">
+        <main className="mx-auto max-w-[1450px]">
+          <PublishedOverlay visible={showPublishOverlay} />
+          <PublishConfirmationModal
+            open={showPublishConfirmation}
+            changeRows={publishChangeRows}
+            onCancel={() => setShowPublishConfirmation(false)}
+            onConfirm={onConfirmPublishChanges}
+          />
+          <RecommendedReviewModal
+            open={showRecommendedReviewModal}
+            changeRows={recommendedReviewChangeRows}
+            valueById={recommendedReviewValuesById}
+            onValueChange={onRecommendedReviewValueChange}
+            onCancel={() => setShowRecommendedReviewModal(false)}
+            onConfirm={stageReviewedRecommendedChanges}
+            onConfirmAndPublish={publishReviewedRecommendedChanges}
+          />
+          <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <button
+                type="button"
+                onClick={() => navigate("/")}
+                className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Back to Pricing Tool
+              </button>
+              <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
+                Pricing Tool
+              </h1>
+              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                Scaled-back view of event pricing and ticket sales.
+              </p>
+            </div>
+          </header>
+
+          <section className="overflow-hidden rounded-2xl border bg-card/95 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)] backdrop-blur">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-2.5 sm:px-6">
+              <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
+                {(
+                  [
+                    { value: "all", label: "All events" },
+                    { value: "on-sale", label: "On sale" },
+                    { value: "unpublished", label: "Unpublished" },
+                  ] as { value: FilterValue; label: string; dot?: string }[]
+                ).map((tab) => (
+                  <button
+                    key={tab.value}
+                    onClick={() => setStatusFilter(tab.value)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+                      statusFilter === tab.value
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {tab.dot && <span className={cn("h-2 w-2 rounded-full", tab.dot)} />}
+                    {tab.label}
+                    <span
+                      className={cn(
+                        "text-xs",
+                        statusFilter === tab.value ? "text-muted-foreground" : "text-muted-foreground/50",
+                      )}
+                    >
+                      {filterTabCounts[tab.value]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="relative flex items-center">
+                <Search className="pointer-events-none absolute left-3 h-4 w-4 text-muted-foreground/60" />
+                <Input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="h-9 w-56 pl-9 text-sm"
+                  placeholder="Search events or venue"
+                  aria-label="Search events"
+                />
+              </div>
+            </div>
+
+            {/* Filter strip */}
+            <div className="flex flex-wrap items-center gap-2.5 border-b border-border/70 bg-muted/20 px-4 py-2.5 sm:px-6">
+              {/* Location */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Location</span>
+                <select
+                  value={locationFilter}
+                  onChange={(e) => setLocationFilter(e.target.value)}
+                  className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="all">All</option>
+                  {uniqueLocations.map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="h-4 w-px bg-border/60" />
+
+              {/* Date range */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Date</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                <span className="text-xs text-muted-foreground">–</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div className="h-4 w-px bg-border/60" />
+
+              {/* Daypart */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Daypart</span>
+                <select
+                  value={daypartFilter}
+                  onChange={(e) => setDaypartFilter(e.target.value)}
+                  className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="all">All</option>
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="evening">Evening</option>
+                </select>
+              </div>
+
+              {/* Clear button */}
+              {activeFilterCount > 0 && (
+                <>
+                  <div className="h-4 w-px bg-border/60" />
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                      {activeFilterCount}
+                    </span>
+                    Clear filters
+                  </button>
+                </>
+              )}
+            </div>
+
+            {pendingChanges.total > 0 && (
+              <div className="border-b bg-primary/5 px-4 py-2 text-sm text-primary sm:px-6">
+                {pendingChanges.total} staged pricing update{pendingChanges.total === 1 ? "" : "s"} ready to publish.
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3 border-b border-border/70 bg-card px-4 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">
+                    {selectedEventIds.length > 0
+                      ? `${selectedEventIds.length} of ${visibleEventIds.length} selected`
+                      : `${visibleEventIds.length} event${visibleEventIds.length === 1 ? "" : "s"}`}
+                  </p>
+                </div>
+                {selectedEventIds.length > 0 && (
+                  <div className="relative flex items-center gap-1">
+                    <Button
+                      ref={eventBulkEditBtnRef}
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setShowEventBulkEditOverlay((c) => !c)}
+                      disabled={sharedEventEditableFields.length === 0}
+                      aria-label={`Edit ${selectedEventIds.length} selected events`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={clearEventSelection}
+                      aria-label={`Clear ${selectedEventIds.length} selected events`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <BulkEditEventsModal
+                      open={showEventBulkEditOverlay}
+                      selectedEvents={selectedEvents}
+                      sharedFields={sharedEventEditableFields}
+                      summaries={eventBulkFieldSummaries}
+                      values={bulkEventEditValues}
+                      modes={bulkEventEditModes}
+                      readyFields={bulkEventFieldsReadyToApply}
+                      onClose={() => setShowEventBulkEditOverlay(false)}
+                      onSetValue={setBulkEventFieldValue}
+                      onSetMode={setBulkEventFieldMode}
+                      onApply={applyBulkEventEdits}
+                      onPublish={() => { applyBulkEventEdits(); setShowPublishOverlay(true); }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-auto max-h-[calc(100vh-280px)]">
+              <Table className="table-fixed" wrapperClassName="overflow-visible">
+                <colgroup>
+                  <col style={{ width: "480px" }} />
+                  <col style={{ width: "170px" }} />
+                  <col style={{ width: "180px" }} />
+                  <col style={{ width: "150px" }} />
+                  <col style={{ width: "210px" }} />
+                </colgroup>
+                <TableHeader className="bg-card sticky top-0 z-10 shadow-[0_1px_3px_0_rgba(0,0,0,0.06)]">
+                  <TableRow className="bg-card hover:bg-card">
+                    <TableHead className="w-[480px] whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={visibleEventIds.length > 0 && selectedVisibleEventCount === visibleEventIds.length}
+                          indeterminate={selectedVisibleEventCount > 0 && selectedVisibleEventCount < visibleEventIds.length}
+                          onCheckedChange={(checked) => toggleAllVisibleEvents(visibleEventIds, checked)}
+                          aria-label="Select all visible events"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => onSort("event")}
+                          className="group flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          Event
+                          {sortIconForKey("event")}
+                        </button>
+                      </div>
+                    </TableHead>
+                    <TableHead className="w-[170px] whitespace-nowrap">
+                      <button type="button" onClick={() => onSort("startTime")} className="group flex items-center gap-1.5 whitespace-nowrap">
+                        Date
+                        {sortIconForKey("startTime")}
+                      </button>
+                    </TableHead>
+                    <TableHead className="w-[110px] whitespace-nowrap">Days / Window</TableHead>
+                    <TableHead className="w-[150px] whitespace-nowrap text-center">Tickets Sold</TableHead>
+                    <TableHead className="w-[210px] whitespace-nowrap text-center">Price Range</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAndSortedEvents.map((event) => {
+                    const hasSeatGroups = event.seatGroups.length > 0;
+                    const isExpanded = expandedRows.has(event.id);
+                    const isPendingPublish = pendingChanges.changedEventIds.has(event.id);
+                    const publishedEvent = publishedById.get(event.id);
+                    const selectedSeatGroupIds = selectedSeatGroupsByEvent[event.id] ?? [];
+                    const allSeatGroupsSelected = hasSeatGroups && selectedSeatGroupIds.length === event.seatGroups.length;
+                    const hasSelectedSeatGroups = selectedSeatGroupIds.length > 0;
+                    const bulkSeatEditValue = bulkSeatEditValues[event.id] ?? "";
+                    const bulkSeatEditField = bulkSeatEditFieldByEvent[event.id] ?? "currentPrice";
+                    const bulkSeatEditMode = bulkSeatEditModeByEvent[event.id] ?? "set";
+                    const isBulkEditOverlayOpen = activeBulkEditEventId === event.id;
+                    const domePriceRange = formatSeatGroupPriceRange(event, "currentPrice");
+                    const hasSoldData = event.domeSold !== null || event.hallSold !== null || event.gaSold !== null;
+                    const totalSold = (event.domeSold ?? 0) + (event.hallSold ?? 0) + (event.gaSold ?? 0);
+
+                    return (
+                      <Fragment key={event.id}>
+                        <TableRow
+                          onClick={() => toggleExpanded(event.id)}
+                          className={cn(
+                            "cursor-pointer hover:bg-muted/35",
+                            isExpanded && "bg-primary/[0.03] border-l-2 border-l-primary",
+                          )}
+                        >
+                          <TableCell>
+                            <div className="flex items-start gap-3">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleExpanded(event.id); }}
+                                aria-label={isExpanded ? "Collapse event details" : "Expand event details"}
+                                className={cn(
+                                  "flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors",
+                                  isExpanded ? "bg-foreground/8 text-foreground" : "text-muted-foreground hover:text-foreground",
+                                )}
+                              >
+                                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-150", isExpanded && "rotate-90")} />
+                              </button>
+                              <Checkbox
+                                className="mt-1"
+                                checked={selectedEventIds.includes(event.id)}
+                                onCheckedChange={(checked) => toggleEventSelection(event.id, checked)}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Select ${event.event}`}
+                              />
+                              <div className="min-w-0">
+                                <p className="max-w-[540px] whitespace-normal text-base leading-tight">{event.event}</p>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                  <p className="text-xs text-muted-foreground">{event.venueName}</p>
+                                  {isPendingPublish && (
+                                    <Badge variant="secondary" className="bg-primary/12 text-primary">Pending Publish</Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-foreground">{formatStartDate(event.startTimeValue)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {event.weekdayLabel} {formatStartTime(event.startTimeValue)} {getVenueTimezone(event.venueName)}
+                            </p>
+                          </TableCell>
+                          <TableCell>
+                            {event.daysInMarket !== null && event.salesWindowDays !== null
+                              ? `${event.daysInMarket} / ${event.salesWindowDays}`
+                              : event.daysInMarket ?? "--"}
+                          </TableCell>
+                          <TableCell className="text-center font-medium">
+                            {hasSoldData ? formatWholeNumber(totalSold) : "--"}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap border-x border-border/40 text-center">
+                            {domePriceRange}
+                          </TableCell>
+                        </TableRow>
+
+                        {isExpanded && (
+                          <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
+                            <TableCell colSpan={5} className="p-0">
+                              <div className="mx-5 my-4 max-w-[1500px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
+                                {hasSeatGroups ? (
+                                  <>
+                                    <div className="sticky top-[48px] z-[5] bg-card">
+                                      <div className="flex flex-wrap items-center gap-3 border-b border-border/70 bg-secondary/35 px-4 py-3">
+                                        <div className="flex items-center gap-2">
+                                          <p className="text-sm font-medium text-foreground">
+                                            {hasSelectedSeatGroups
+                                              ? `${selectedSeatGroupIds.length} seat group${selectedSeatGroupIds.length === 1 ? "" : "s"} selected`
+                                              : "Seat Group Pricing"}
+                                          </p>
+                                          {hasSelectedSeatGroups && (
+                                            <div className="relative flex items-center gap-1">
+                                              <Button
+                                                ref={(el) => { seatBulkEditBtnRefs.current[event.id] = el; }}
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                onClick={() => setActiveBulkEditEventId((current) => current === event.id ? null : event.id)}
+                                                aria-label={`Edit ${selectedSeatGroupIds.length} selected seat groups`}
+                                              >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                              </Button>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                                onClick={() => clearSeatGroupSelection(event.id)}
+                                                aria-label={`Clear ${selectedSeatGroupIds.length} selected seat groups`}
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </Button>
+                                              {isBulkEditOverlayOpen && createPortal(
+                                                <div
+                                                  className="fixed z-50 w-[280px] rounded-xl border border-border/80 bg-card p-3 shadow-xl"
+                                                  style={(() => {
+                                                    const rect = seatBulkEditBtnRefs.current[event.id]?.getBoundingClientRect();
+                                                    return rect ? { top: rect.bottom + 8, left: Math.max(8, rect.right - 280) } : { top: 0, left: 0 };
+                                                  })()}
+                                                >
+                                                  <div className="space-y-3">
+                                                    <Select value={bulkSeatEditField} onValueChange={(next) => { setBulkSeatEditFieldByEvent((c) => ({ ...c, [event.id]: next as SeatGroupEditableField })); setBulkSeatEditModeByEvent((c) => ({ ...c, [event.id]: "set" })); }}>
+                                                      <SelectTrigger className="h-8 w-full bg-background"><SelectValue placeholder="Field" /></SelectTrigger>
+                                                      <SelectContent>
+                                                        <SelectItem value="name">Seat Group</SelectItem>
+                                                        <SelectItem value="currentPrice">Current Price</SelectItem>
+                                                      </SelectContent>
+                                                    </Select>
+                                                    {bulkSeatEditField === "currentPrice" && (
+                                                      <Select value={bulkSeatEditMode} onValueChange={(next) => setBulkSeatEditModeByEvent((c) => ({ ...c, [event.id]: next as NumericBulkEditMode }))}>
+                                                        <SelectTrigger className="h-8 w-full bg-background"><SelectValue placeholder="Mode" /></SelectTrigger>
+                                                        <SelectContent>
+                                                          {numericBulkEditModes.map((mode) => (
+                                                            <SelectItem key={mode.value} value={mode.value}>{mode.label}</SelectItem>
+                                                          ))}
+                                                        </SelectContent>
+                                                      </Select>
+                                                    )}
+                                                    <Input
+                                                      type={bulkSeatEditField === "currentPrice" ? "number" : "text"}
+                                                      inputMode={bulkSeatEditField === "currentPrice" ? "decimal" : "text"}
+                                                      step={bulkSeatEditField === "currentPrice" ? "0.01" : undefined}
+                                                      value={bulkSeatEditValue}
+                                                      onChange={(e) => setBulkSeatEditValues((c) => ({ ...c, [event.id]: e.target.value }))}
+                                                      onKeyDown={(e) => { if (e.key === "Enter") applyBulkSeatEdit(event.id); if (e.key === "Escape") setActiveBulkEditEventId(null); }}
+                                                      className="h-8 w-full bg-background"
+                                                      placeholder={bulkSeatEditField === "name" ? "Set name" : bulkSeatEditMode === "percent" ? "Increase by %" : bulkSeatEditMode === "flat" ? "Increase by amount" : "Set price"}
+                                                      aria-label={`Bulk edit ${bulkSeatEditField} for ${event.event}`}
+                                                    />
+                                                    <div className="flex items-center justify-end gap-2">
+                                                      <Button variant="ghost" size="sm" onClick={() => setActiveBulkEditEventId(null)}>Cancel</Button>
+                                                      <Button variant="secondary" size="sm" onClick={() => applyBulkSeatEdit(event.id)} disabled={bulkSeatEditValue.trim() === ""}>Apply</Button>
+                                                    </div>
+                                                  </div>
+                                                </div>,
+                                                document.body,
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <Table wrapperClassName="overflow-visible">
+                                      <TableHeader className="sticky top-[93px] z-[4] bg-secondary/55">
+                                        <TableRow className="bg-card [&_th]:bg-secondary/55 hover:bg-secondary/55">
+                                          <TableHead className="w-[40px] whitespace-nowrap">
+                                            <Checkbox
+                                              checked={allSeatGroupsSelected}
+                                              indeterminate={hasSelectedSeatGroups && !allSeatGroupsSelected}
+                                              onCheckedChange={(checked) => toggleAllSeatGroupsForEvent(event.id, event.seatGroups, checked)}
+                                              aria-label={`Select all seat groups for ${event.event}`}
+                                            />
+                                          </TableHead>
+                                          <TableHead className="whitespace-nowrap">Seat Group</TableHead>
+                                          <TableHead className="whitespace-nowrap text-center">Ticket Price</TableHead>
+                                          <TableHead className="whitespace-nowrap text-center">Tickets Sold</TableHead>
+                                        </TableRow>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {event.seatGroups.map((seatGroup) => {
+                                          const publishedSeatGroup = publishedEvent?.seatGroups.find((item) => item.id === seatGroup.id);
+                                          const isSeatRecommendationDifferent = !arePriceValuesEqual(seatGroup.recTicketPrice, seatGroup.currentPrice);
+                                          const seatRecommendationKey = `${event.id}:${seatGroup.id}`;
+                                          const isSeatRecommendationUndo =
+                                            draftSeatRecommendationUndoById[seatRecommendationKey] !== undefined &&
+                                            arePriceValuesEqual(seatGroup.recTicketPrice, seatGroup.currentPrice);
+                                          const isSeatNameDirty = seatGroup.name !== (publishedSeatGroup?.name ?? seatGroup.name);
+                                          const isSeatPriceDirty = seatGroup.currentPrice !== (publishedSeatGroup?.currentPrice ?? seatGroup.currentPrice);
+                                          const sgSold = computeSgTicketsSold(seatGroup);
+                                          return (
+                                            <TableRow key={seatGroup.id}>
+                                              <TableCell>
+                                                <Checkbox
+                                                  checked={selectedSeatGroupIds.includes(seatGroup.id)}
+                                                  onCheckedChange={(checked) => toggleSeatGroupSelection(event.id, seatGroup.id, checked)}
+                                                  aria-label={`Select ${seatGroup.name}`}
+                                                />
+                                              </TableCell>
+                                              <TableCell>
+                                                {editingSeatCell?.eventId === event.id && editingSeatCell.seatGroupId === seatGroup.id && editingSeatCell.field === "name" ? (
+                                                  <Input
+                                                    type="text"
+                                                    autoFocus
+                                                    value={editingSeatValue}
+                                                    onChange={(e) => setEditingSeatValue(e.target.value)}
+                                                    onKeyDown={(e) => { if (e.key === "Enter") commitSeatCellEdit(); if (e.key === "Escape") cancelSeatPriceEdit(); }}
+                                                    onBlur={cancelSeatPriceEdit}
+                                                    className="h-8 w-[150px] bg-background"
+                                                    aria-label={`Seat group name for ${seatGroup.name}`}
+                                                  />
+                                                ) : (
+                                                  <button
+                                                    type="button"
+                                                    onDoubleClick={() => beginSeatCellEdit(event.id, seatGroup, "name")}
+                                                    className={cn("rounded px-1 text-left font-medium", isSeatNameDirty ? "text-orange-500" : "text-foreground")}
+                                                    aria-label={`Edit seat group name for ${seatGroup.name}`}
+                                                  >
+                                                    {seatGroup.name}
+                                                  </button>
+                                                )}
+                                              </TableCell>
+                                              <TableCell className="text-center">
+                                                {formatCurrency(seatGroup.currentPrice)}
+                                              </TableCell>
+                                              <TableCell className="text-center">
+                                                {sgSold !== null ? formatWholeNumber(sgSold) : "--"}
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })}
+                                      </TableBody>
+                                    </Table>
+                                  </>
+                                ) : (
+                                  <div className="px-4 py-6 text-sm text-muted-foreground">
+                                    No seat group pricing is available for this event yet.
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </section>
+        </main>
+        <DraftActionFooter
+          stagedCount={pendingChanges.total}
+          onDiscard={onDiscardChanges}
+          onPublish={onPublishChanges}
+        />
+      </div>
+    );
+  }
+
   if (route.type === "seatmap") {
     const event = draftEvents.find((item) => item.id === route.eventId);
 
@@ -4927,44 +6362,140 @@ export default function App() {
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
-              Pricing Test
+              Pricing Tool
             </h1>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
               Search, filter, and stage pricing updates across active events before publishing.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/mvp")}
+            className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-card px-3.5 py-2 text-sm font-medium text-muted-foreground shadow-sm hover:text-foreground hover:bg-muted/40 transition-colors"
+          >
+            MVP
+          </button>
         </header>
 
         <section className="overflow-hidden rounded-2xl border bg-card/95 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)] backdrop-blur">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-secondary/65 px-4 py-3 sm:px-6">
-            <div className="flex flex-1 flex-wrap items-center gap-2">
-              <div className="flex min-w-[320px] flex-1 items-center overflow-hidden rounded-lg border border-border bg-background shadow-sm sm:max-w-md">
-                <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    className="rounded-none border-0 pl-9 shadow-none focus-visible:ring-0"
-                    placeholder="Search events or venue"
-                    aria-label="Search events"
-                  />
-                </div>
-                <div className="h-5 w-px bg-border" />
-                <Select value={statusFilter} onValueChange={(next) => setStatusFilter(next as FilterValue)}>
-                  <SelectTrigger className="w-[150px] rounded-none border-0 shadow-none focus:ring-0 focus-visible:ring-0">
-                    <SelectValue placeholder="Filter" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusFilterOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-2.5 sm:px-6">
+            {/* Filter tabs — shadcn Tabs style */}
+            <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
+              {(
+                [
+                  { value: "all", label: "All events" },
+                  { value: "attention", label: "Needs attention", dot: "bg-warning" },
+                  { value: "on-sale", label: "On sale" },
+                  { value: "unpublished", label: "Unpublished" },
+                ] as { value: FilterValue; label: string; dot?: string }[]
+              ).map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setStatusFilter(tab.value)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-all",
+                    statusFilter === tab.value
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tab.dot && <span className={cn("h-2 w-2 rounded-full", tab.dot)} />}
+                  {tab.label}
+                  <span
+                    className={cn(
+                      "text-xs",
+                      statusFilter === tab.value ? "text-muted-foreground" : "text-muted-foreground/50",
+                    )}
+                  >
+                    {filterTabCounts[tab.value]}
+                  </span>
+                </button>
+              ))}
             </div>
 
+            {/* Search */}
+            <div className="relative flex items-center">
+              <Search className="pointer-events-none absolute left-3 h-4 w-4 text-muted-foreground/60" />
+              <Input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="h-9 w-56 pl-9 text-sm"
+                placeholder="Search events or venue"
+                aria-label="Search events"
+              />
+            </div>
+          </div>
+
+          {/* Filter strip */}
+          <div className="flex flex-wrap items-center gap-2.5 border-b border-border/70 bg-muted/20 px-4 py-2.5 sm:px-6">
+            {/* Location */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Location</span>
+              <select
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">All</option>
+                {uniqueLocations.map((loc) => (
+                  <option key={loc} value={loc}>{loc}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="h-4 w-px bg-border/60" />
+
+            {/* Date range */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Date</span>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <span className="text-xs text-muted-foreground">–</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            <div className="h-4 w-px bg-border/60" />
+
+            {/* Daypart */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Daypart</span>
+              <select
+                value={daypartFilter}
+                onChange={(e) => setDaypartFilter(e.target.value)}
+                className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">All</option>
+                <option value="morning">Morning</option>
+                <option value="afternoon">Afternoon</option>
+                <option value="evening">Evening</option>
+              </select>
+            </div>
+
+            {/* Clear button */}
+            {activeFilterCount > 0 && (
+              <>
+                <div className="h-4 w-px bg-border/60" />
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                >
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                    {activeFilterCount}
+                  </span>
+                  Clear filters
+                </button>
+              </>
+            )}
           </div>
 
           {pendingChanges.total > 0 && (
@@ -4976,17 +6507,34 @@ export default function App() {
 
           <div className="flex flex-wrap items-center gap-3 border-b border-border/70 bg-card px-4 py-3 sm:px-6">
             <div className="flex flex-wrap items-center gap-3">
-              <div>
+              <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-foreground">
                   {selectedEventIds.length > 0
                     ? `${selectedEventIds.length} of ${visibleEventIds.length} selected`
                     : `${visibleEventIds.length} event${visibleEventIds.length === 1 ? "" : "s"}`}
                 </p>
+                {scopedRecommendations.length > 0 && (
+                  <>
+                    <span className="text-sm text-muted-foreground">·</span>
+                    <span className="text-sm text-muted-foreground">
+                      {scopedRecommendations.length} recommendation{scopedRecommendations.length === 1 ? "" : "s"}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs font-semibold text-primary hover:text-primary hover:bg-primary/10"
+                      onClick={applyAllRecommendations}
+                    >
+                      {selectedEventIds.length > 0 ? "Apply to Selected" : "Apply All"}
+                    </Button>
+                  </>
+                )}
               </div>
 
               {selectedEventIds.length > 0 && (
                 <div className="relative flex items-center gap-1">
                   <Button
+                    ref={eventBulkEditBtnRef}
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
@@ -5006,221 +6554,67 @@ export default function App() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
 
-                  {showEventBulkEditOverlay && (
-                    <div className="absolute left-0 top-full z-20 mt-2 w-[760px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border/80 bg-card shadow-xl">
-                      <div className="border-b border-border/70 bg-secondary/20 px-4 py-3">
-                        <p className="text-sm font-medium text-foreground">Bulk Edit Events</p>
-                        <p className="text-xs text-muted-foreground">
-                          Shared editable fields across {selectedEventIds.length} selected event
-                          {selectedEventIds.length === 1 ? "" : "s"}.
-                        </p>
-                      </div>
-
-                      <div className="max-h-[440px] overflow-auto">
-                        <Table className="min-w-[700px]">
-                          <TableHeader className="bg-secondary/35">
-                            <TableRow className="hover:bg-secondary/35">
-                              <TableHead className="w-[190px]">Field</TableHead>
-                              <TableHead className="w-[170px]">Current</TableHead>
-                              <TableHead className="w-[340px]">Edit</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(["event", "seatGroup"] as const).map((group) => {
-                              const fields = sharedEventEditableFields.filter((field) => field.group === group);
-                              if (fields.length === 0) {
-                                return null;
-                              }
-
-                              return (
-                                <Fragment key={group}>
-                                  <TableRow className="bg-secondary/10 hover:bg-secondary/10">
-                                    <TableCell colSpan={3} className="py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                      {group === "event" ? "Event Fields" : "Seat Groups"}
-                                    </TableCell>
-                                  </TableRow>
-                                  {fields.map((field) => {
-                                    const summary = eventBulkFieldSummaries[field.value] ?? {
-                                      valueLabel: "--",
-                                    };
-                                    const fieldValue = bulkEventEditValues[field.value] ?? "";
-                                    const fieldMode = bulkEventEditModes[field.value] ?? "set";
-
-                                    return (
-                                      <TableRow key={field.value} className="align-top">
-                                        <TableCell className="py-3">
-                                          <div>
-                                            <p className="font-medium text-foreground">{field.label}</p>
-                                            {field.group === "seatGroup" && (
-                                              <p className="text-xs text-muted-foreground">Current Price</p>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                        <TableCell className="py-3">
-                                          <div>
-                                            <p
-                                              className={cn(
-                                                "font-medium text-foreground",
-                                                summary.valueLabel === "Mixed" && "text-muted-foreground",
-                                              )}
-                                            >
-                                              {summary.valueLabel}
-                                            </p>
-                                            {summary.detailLabel && (
-                                              <p className="text-xs text-muted-foreground">
-                                                {summary.detailLabel}
-                                              </p>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                        <TableCell className="py-3">
-                                          <div className="space-y-2">
-                                            {field.inputType === "select" ? (
-                                              <div>
-                                                <Select
-                                                  value={fieldValue}
-                                                  onValueChange={(next) =>
-                                                    setBulkEventFieldValue(field.value, next)
-                                                  }
-                                                >
-                                                  <SelectTrigger className="h-8 w-full bg-background">
-                                                    <SelectValue placeholder="Select value" />
-                                                  </SelectTrigger>
-                                                  <SelectContent>
-                                                    {(field.selectOptions ?? []).map((option) => (
-                                                      <SelectItem key={option} value={option}>
-                                                        {option}
-                                                      </SelectItem>
-                                                    ))}
-                                                  </SelectContent>
-                                                </Select>
-                                              </div>
-                                            ) : (
-                                              <>
-                                                <Select
-                                                  value={fieldMode}
-                                                  onValueChange={(next) =>
-                                                    setBulkEventFieldMode(
-                                                      field.value,
-                                                      next as NumericBulkEditMode,
-                                                    )
-                                                  }
-                                                >
-                                                  <SelectTrigger className="h-8 w-full bg-background">
-                                                    <SelectValue placeholder="Mode" />
-                                                  </SelectTrigger>
-                                                  <SelectContent>
-                                                    {numericBulkEditModes.map((mode) => (
-                                                      <SelectItem key={mode.value} value={mode.value}>
-                                                        {mode.label}
-                                                      </SelectItem>
-                                                    ))}
-                                                  </SelectContent>
-                                                </Select>
-                                                <div>
-                                                  <Input
-                                                    type="number"
-                                                    inputMode="decimal"
-                                                    step="0.01"
-                                                    value={fieldValue}
-                                                    onChange={(selectionEvent) =>
-                                                      setBulkEventFieldValue(
-                                                        field.value,
-                                                        selectionEvent.target.value,
-                                                      )
-                                                    }
-                                                    onKeyDown={(selectionEvent) => {
-                                                      if (selectionEvent.key === "Enter") {
-                                                        applyBulkEventEdits();
-                                                      }
-                                                      if (selectionEvent.key === "Escape") {
-                                                        setShowEventBulkEditOverlay(false);
-                                                      }
-                                                    }}
-                                                    className="h-8 w-full bg-background"
-                                                    placeholder={
-                                                      fieldMode === "percent"
-                                                        ? "Increase by %"
-                                                        : fieldMode === "flat"
-                                                          ? "Increase by amount"
-                                                          : field.value.startsWith("seatGroup:")
-                                                            ? "Set price"
-                                                            : "Set value"
-                                                    }
-                                                    aria-label={`Bulk edit ${field.label}`}
-                                                  />
-                                                </div>
-                                              </>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </Fragment>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2 border-t border-border/70 px-4 py-3">
-                        <Button variant="ghost" size="sm" onClick={() => setShowEventBulkEditOverlay(false)}>
-                          Close
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={applyBulkEventEdits}
-                          disabled={bulkEventFieldsReadyToApply.length === 0}
-                        >
-                          Apply
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <BulkEditEventsModal
+                    open={showEventBulkEditOverlay}
+                    selectedEvents={selectedEvents}
+                    sharedFields={sharedEventEditableFields}
+                    summaries={eventBulkFieldSummaries}
+                    values={bulkEventEditValues}
+                    modes={bulkEventEditModes}
+                    readyFields={bulkEventFieldsReadyToApply}
+                    onClose={() => setShowEventBulkEditOverlay(false)}
+                    onSetValue={setBulkEventFieldValue}
+                    onSetMode={setBulkEventFieldMode}
+                    onApply={applyBulkEventEdits}
+                    onPublish={() => { applyBulkEventEdits(); setShowPublishOverlay(true); }}
+                  />
                 </div>
               )}
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <Table className="w-[3240px] table-fixed">
+          <div className="overflow-auto max-h-[calc(100vh-280px)]">
+            <Table className="table-fixed" wrapperClassName="overflow-visible">
               <colgroup>
-                <col style={{width: '650px'}} />
+                <col style={{width: '420px'}} />
+                <col style={{width: '130px'}} />
                 <col style={{width: '170px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '180px'}} />
-                <col style={{width: '250px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '170px'}} />
-                <col style={{width: '170px'}} />
-                <col style={{width: '140px'}} />
-                <col style={{width: '190px'}} />
-                <col style={{width: '100px'}} />
                 <col style={{width: '160px'}} />
+                <col style={{width: '105px'}} />
+                <col style={{width: '180px'}} />
+                <col style={{width: '120px'}} />
+                <col style={{width: '120px'}} />
+                <col style={{width: '100px'}} />
+                <col style={{width: '110px'}} />
+                <col style={{width: '90px'}} />
+                <col style={{width: '100px'}} />
+                <col style={{width: '110px'}} />
+                <col style={{width: '90px'}} />
+                <col style={{width: '100px'}} />
+                <col style={{width: '110px'}} />
+                <col style={{width: '90px'}} />
+                <col style={{width: '160px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '140px'}} />
+                <col style={{width: '110px'}} />
+                <col style={{width: '150px'}} />
                 <col style={{width: '120px'}} />
                 <col style={{width: '70px'}} />
               </colgroup>
-              <TableHeader className="bg-secondary/40">
-                <TableRow className="hover:bg-secondary/40">
+              <TableHeader className="bg-card sticky top-0 z-10 shadow-[0_1px_3px_0_rgba(0,0,0,0.06)]">
+                <TableRow className="bg-card hover:bg-card">
                   <TableHead
                     colSpan={5}
-                    className="w-[1300px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Event Details</span>
                     </div>
                   </TableHead>
                   <TableHead
-                    colSpan={1}
-                    className="w-[250px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    colSpan={3}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Pricing</span>
@@ -5228,32 +6622,44 @@ export default function App() {
                   </TableHead>
                   <TableHead
                     colSpan={3}
-                    className="w-[270px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    className="w-[330px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Percent Sold</span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Dome</span>
                     </div>
                   </TableHead>
                   <TableHead
                     colSpan={3}
-                    className="w-[300px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    className="w-[330px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Sell Through</span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Hall</span>
                     </div>
                   </TableHead>
                   <TableHead
-                    colSpan={2}
-                    className="w-[340px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    colSpan={3}
+                    className="w-[330px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                  >
+                    <div className="flex h-full items-center justify-center">
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">GA</span>
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    colSpan={3}
+                    className="w-[510px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Revenue</span>
                     </div>
                   </TableHead>
-                  <TableHead colSpan={6} className="w-[780px] h-5 border-b border-border/60 bg-secondary/20" />
+                  <TableHead colSpan={5} className="w-[780px] h-5 border-b border-border/60 bg-secondary/20 p-0 text-center">
+                    <div className="flex h-full items-center justify-center">
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Funnel Performance</span>
+                    </div>
+                  </TableHead>
                 </TableRow>
-                <TableRow className="hover:bg-secondary/40">
-                  <TableHead className="w-[650px] whitespace-nowrap">
+                <TableRow className="hover:bg-card bg-card">
+                  <TableHead className="w-[420px] whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <Checkbox
                         checked={visibleEventIds.length > 0 && selectedVisibleEventCount === visibleEventIds.length}
@@ -5274,6 +6680,9 @@ export default function App() {
                       </button>
                     </div>
                   </TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">
+                    Health
+                  </TableHead>
                   <TableHead className="w-[170px] whitespace-nowrap">
                     <button
                       type="button"
@@ -5284,43 +6693,36 @@ export default function App() {
                       {sortIconForKey("startTime")}
                     </button>
                   </TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap">
-                    Days on Sale
+                  <TableHead className="w-[160px] whitespace-nowrap">
+                    Days / Window
                   </TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => onSort("daysRemaining")}
-                      className="group flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      {sortLabelMap.daysRemaining}
-                      {sortIconForKey("daysRemaining")}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[180px] whitespace-nowrap">Percent Cycle Complete</TableHead>
-                  <TableHead className="w-[250px] whitespace-nowrap border-x border-border/70">
-                    Dome Price Range
-                  </TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap text-center border-l border-border/70">
+                  <TableHead className="w-[105px] whitespace-nowrap">% Cycle</TableHead>
+                  <TableHead className="w-[180px] whitespace-nowrap border-l border-border/70 text-center">
                     Dome
                   </TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap text-center">Hall</TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">GA</TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap text-center border-l border-border/70">
-                    Dome
+                  <TableHead className="w-[120px] whitespace-nowrap text-center">Hall</TableHead>
+                  <TableHead className="w-[120px] whitespace-nowrap border-r border-border/70 text-center">GA</TableHead>
+                  <TableHead className="w-[100px] whitespace-nowrap text-center border-l border-border/70">Sold</TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
+                  <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
+                  <TableHead className="w-[100px] whitespace-nowrap text-center">Sold</TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
+                  <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
+                  <TableHead className="w-[100px] whitespace-nowrap text-center">Sold</TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
+                  <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
+                  <TableHead className="w-[160px] whitespace-nowrap border-l border-border/70 text-center px-5">
+                    Net Ticket Rev
                   </TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap text-center">Hall</TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap text-center border-r border-border/70">GA</TableHead>
-                  <TableHead className="w-[170px] whitespace-nowrap border-l border-border/70">
-                    Net Ticket Revenue
+                  <TableHead className="w-[150px] whitespace-nowrap text-center px-5">
+                    Proj. Net Rev
                   </TableHead>
-                  <TableHead className="w-[170px] whitespace-nowrap border-r border-border/70">
-                    Proj. Net Revenue
+                  <TableHead className="w-[130px] whitespace-nowrap border-r border-border/70 text-center px-5">
+                    Opt. Proj
                   </TableHead>
                   <TableHead className="w-[140px] whitespace-nowrap">TOF</TableHead>
-                  <TableHead className="w-[190px] whitespace-nowrap">Funnel Entries vs. Expected</TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap">FCR</TableHead>
-                  <TableHead className="w-[160px] whitespace-nowrap">FCR vs. Expected</TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap">FCR</TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap">FCR vs. Exp.</TableHead>
                   <TableHead className="w-[120px] whitespace-nowrap">
                     <button
                       type="button"
@@ -5373,7 +6775,8 @@ export default function App() {
                         onClick={() => toggleExpanded(event.id)}
                         className={cn(
                           "cursor-pointer hover:bg-muted/35",
-                          event.attention === "underperforming" && "bg-warning/5",
+                          event.attention === "underperforming" && !isExpanded && "bg-warning/5",
+                          isExpanded && "bg-primary/[0.03] border-l-2 border-l-primary",
                         )}
                       >
                         <TableCell>
@@ -5402,12 +6805,12 @@ export default function App() {
                             />
 
                             <div className="min-w-0">
-                              <p className="max-w-[540px] whitespace-normal text-base font-medium leading-tight">
+                              <p className="max-w-[540px] whitespace-normal text-base leading-tight">
                                 {event.event}
                               </p>
                               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                                 <p className="text-xs text-muted-foreground">{event.venueName}</p>
-                                {attentionBadge(event.attention)}
+                                {attentionBadge(event)}
                                 {isPendingPublish && (
                                   <Badge variant="secondary" className="bg-primary/12 text-primary">
                                     Pending Publish
@@ -5418,38 +6821,65 @@ export default function App() {
                           </div>
                         </TableCell>
 
+                        <TableCell className="text-center">
+                          <EventHealthBadge score={event.eventHealth} />
+                        </TableCell>
+
                         <TableCell>
                           <div>
-                            <p className="font-medium text-foreground">{event.startTimeLabel}</p>
-                            <p className="text-xs text-muted-foreground">{event.weekdayLabel}</p>
+                            <p className="text-foreground">{formatStartDate(event.startTimeValue)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {event.weekdayLabel} {formatStartTime(event.startTimeValue)} {getVenueTimezone(event.venueName)}
+                            </p>
                           </div>
                         </TableCell>
-                        <TableCell>{event.daysInMarket ?? "--"}</TableCell>
-                        <TableCell>{event.daysRemaining ?? "--"}</TableCell>
+                        <TableCell>
+                          {event.daysInMarket !== null && event.salesWindowDays !== null
+                            ? `${event.daysInMarket} / ${event.salesWindowDays}`
+                            : event.daysInMarket ?? "--"}
+                        </TableCell>
                         <TableCell>
                           {formatCycleComplete(event.daysInMarket, event.salesWindowDays)}
                         </TableCell>
-                        <TableCell className="border-x border-border/40 font-semibold">
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
                           {domePriceRange}
                         </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-center border-l border-border/40",
-                            event.attention === "underperforming" && "font-semibold text-destructive",
-                          )}
-                        >
-                          {formatPercent(event.soldPct)}
+                        <TableCell className="text-center">
+                          {event.hallAtp !== null ? formatCurrency(event.hallAtp) : "--"}
                         </TableCell>
-                        <TableCell className="text-center">{formatPercent(event.hallSoldPct)}</TableCell>
-                        <TableCell className="text-center border-r border-border/40">{formatPercent(gaSoldPct)}</TableCell>
+                        <TableCell className="text-center border-r border-border/40">
+                          {event.gaAtp !== null ? formatCurrency(event.gaAtp) : "--"}
+                        </TableCell>
                         <TableCell className="text-center border-l border-border/40">
-                          {formatPercent(event.domeProjectedSellthroughPct)}
+                          {event.domeSold !== null ? formatWholeNumber(event.domeSold) : "--"}
                         </TableCell>
-                        <TableCell className="text-center">{formatPercent(hallProjectedSellthrough)}</TableCell>
-                        <TableCell className="text-center border-r border-border/40">{formatPercent(gaProjectedSellthrough)}</TableCell>
+                        <TableCell className="text-center">
+                          {event.domeSoldProjected !== null ? formatWholeNumber(event.domeSoldProjected) : "--"}
+                        </TableCell>
+                        <TableCell className="text-center border-r border-border/40">
+                          <SellThroughBar pct={event.soldPct} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {event.hallSold !== null ? formatWholeNumber(event.hallSold) : "--"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {event.hallSoldProjected !== null ? formatWholeNumber(event.hallSoldProjected) : "--"}
+                        </TableCell>
+                        <TableCell className="text-center border-r border-border/40">
+                          <SellThroughBar pct={event.hallSoldPct} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {event.gaSold !== null ? formatWholeNumber(event.gaSold) : "--"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {event.gaSoldProjected !== null ? formatWholeNumber(event.gaSoldProjected) : "--"}
+                        </TableCell>
+                        <TableCell className="text-center border-r border-border/40">
+                          <SellThroughBar pct={gaSoldPct} />
+                        </TableCell>
                         <TableCell
                           className={cn(
-                            "border-l border-border/40 font-semibold",
+                            "border-l border-border/40 text-center px-5",
                             event.attention === "underperforming" && "text-destructive",
                           )}
                         >
@@ -5468,53 +6898,38 @@ export default function App() {
                               >
                                 {formatCurrency(event.netTicketRevenue)}
                               </span>
-                              <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-[190px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 text-left shadow-xl opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-                                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                              <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-[220px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 text-left shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+                                <p className="mb-2 text-xs font-semibold text-foreground">
                                   Net Ticket Revenue
                                 </p>
-                                <div className="mt-2 space-y-1.5 text-sm">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span className="text-muted-foreground">Group Sales</span>
-                                    <span>{formatCurrency(netTicketRevenueBreakdown.groupSales)}</span>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span className="text-muted-foreground">Consumer</span>
-                                    <span>{formatCurrency(netTicketRevenueBreakdown.consumer)}</span>
-                                  </div>
-                                </div>
+                                <ul className="space-y-1.5">
+                                  <li className="flex items-center justify-between gap-3 text-xs">
+                                    <span className="font-medium text-foreground">Group Sales</span>
+                                    <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.groupSales)}</span>
+                                  </li>
+                                  <li className="flex items-center justify-between gap-3 text-xs">
+                                    <span className="font-medium text-foreground">Consumer</span>
+                                    <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.consumer)}</span>
+                                  </li>
+                                </ul>
                               </div>
                             </div>
                           )}
                         </TableCell>
-                        <TableCell className="border-r border-border/40 font-semibold">
+                        <TableCell className="text-center px-5">
                           {formatCurrency(event.projectedNetRevenue)}
                         </TableCell>
-                        <TableCell>{formatWholeNumber(event.tof)}</TableCell>
-                        <TableCell
-                          className={cn(
-                            "font-semibold",
-                            event.funnelEntriesVsExpectedPct === null && "text-muted-foreground",
-                            event.funnelEntriesVsExpectedPct !== null &&
-                              event.funnelEntriesVsExpectedPct < 0 &&
-                              "text-destructive",
-                            event.funnelEntriesVsExpectedPct !== null &&
-                              event.funnelEntriesVsExpectedPct > 0 &&
-                              "text-success",
-                          )}
-                        >
-                          {formatSignedPercent(event.funnelEntriesVsExpectedPct)}
+                        <TableCell className="border-r border-border/40 text-center px-5">
+                          {formatCurrency(event.optimizedProjected)}
                         </TableCell>
+                        <TableCell>{formatWholeNumber(event.tof)}</TableCell>
                         <TableCell>{formatPercent(event.fcrPct)}</TableCell>
                         <TableCell
                           className={cn(
                             "font-semibold",
                             event.fcrVsExpectedPct === null && "text-muted-foreground",
-                            event.fcrVsExpectedPct !== null &&
-                              event.fcrVsExpectedPct < 0 &&
-                              "text-destructive",
-                            event.fcrVsExpectedPct !== null &&
-                              event.fcrVsExpectedPct > 0 &&
-                              "text-success",
+                            event.fcrVsExpectedPct !== null && event.fcrVsExpectedPct < 0 && "text-destructive",
+                            event.fcrVsExpectedPct !== null && event.fcrVsExpectedPct > 0 && "text-success",
                           )}
                         >
                           {formatSignedPercent(event.fcrVsExpectedPct)}
@@ -5562,13 +6977,14 @@ export default function App() {
                       </TableRow>
 
                       {isExpanded && (
-                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                        <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
                           <TableCell colSpan={20} className="p-0">
-                            <div className="mx-4 my-3 overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
+                            <div className="mx-5 my-4 max-w-[1100px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
                               {hasSeatGroups ? (
                                 <>
-                                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 bg-secondary/35 px-4 py-3">
-                                    <div>
+                                  <div className="sticky top-[68.5px] z-[5] bg-card">
+                                  <div className="flex flex-wrap items-center gap-3 border-b border-border/70 bg-secondary/35 px-4 py-3">
+                                    <div className="flex items-center gap-2">
                                       <p className="text-sm font-medium text-foreground">
                                         {hasSelectedSeatGroups
                                           ? `${selectedSeatGroupIds.length} seat group${
@@ -5577,38 +6993,38 @@ export default function App() {
                                           : "Seat Group Pricing"}
                                       </p>
                                       {hasSelectedSeatGroups && (
-                                        <p className="text-xs text-muted-foreground">
-                                          {selectedSeatGroupIds.length} selection
-                                          {selectedSeatGroupIds.length === 1 ? "" : "s"} checked
-                                        </p>
-                                      )}
-                                    </div>
-                                    {hasSelectedSeatGroups && (
-                                      <div className="relative flex items-center gap-1">
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-8 w-8"
-                                          onClick={() =>
-                                            setActiveBulkEditEventId((current) =>
-                                              current === event.id ? null : event.id,
-                                            )
-                                          }
-                                          aria-label={`Edit ${selectedSeatGroupIds.length} selected seat groups`}
-                                        >
-                                          <Pencil className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                          onClick={() => clearSeatGroupSelection(event.id)}
-                                          aria-label={`Clear ${selectedSeatGroupIds.length} selected seat groups`}
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                        {isBulkEditOverlayOpen && (
-                                          <div className="absolute right-0 top-full z-20 mt-2 w-[280px] rounded-xl border border-border/80 bg-card p-3 shadow-xl">
+                                        <div className="relative flex items-center gap-1">
+                                          <Button
+                                            ref={(el) => { seatBulkEditBtnRefs.current[event.id] = el; }}
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7"
+                                            onClick={() =>
+                                              setActiveBulkEditEventId((current) =>
+                                                current === event.id ? null : event.id,
+                                              )
+                                            }
+                                            aria-label={`Edit ${selectedSeatGroupIds.length} selected seat groups`}
+                                          >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                            onClick={() => clearSeatGroupSelection(event.id)}
+                                            aria-label={`Clear ${selectedSeatGroupIds.length} selected seat groups`}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </Button>
+                                        {isBulkEditOverlayOpen && createPortal(
+                                          <div
+                                            className="fixed z-50 w-[280px] rounded-xl border border-border/80 bg-card p-3 shadow-xl"
+                                            style={(() => {
+                                              const rect = seatBulkEditBtnRefs.current[event.id]?.getBoundingClientRect();
+                                              return rect ? { top: rect.bottom + 8, left: Math.max(8, rect.right - 280) } : { top: 0, left: 0 };
+                                            })()}
+                                          >
                                             <div className="space-y-3">
                                               <Select
                                                 value={bulkSeatEditField}
@@ -5704,15 +7120,18 @@ export default function App() {
                                                 </Button>
                                               </div>
                                             </div>
-                                          </div>
+                                          </div>,
+                                          document.body,
                                         )}
                                       </div>
                                     )}
+                                    </div>
                                   </div>
-                                  <Table className="min-w-[820px]">
-                                    <TableHeader className="bg-secondary/55">
-                                      <TableRow className="hover:bg-secondary/55">
-                                        <TableHead className="w-[56px] whitespace-nowrap">
+                                  </div>
+                                  <Table className="table-fixed" wrapperClassName="overflow-visible">
+                                    <TableHeader className="sticky top-[113.5px] z-[4] bg-secondary/55">
+                                      <TableRow className="bg-card [&_th]:bg-secondary/55 hover:bg-secondary/55">
+                                        <TableHead className="w-[40px] whitespace-nowrap">
                                           <Checkbox
                                             checked={allSeatGroupsSelected}
                                             indeterminate={hasSelectedSeatGroups && !allSeatGroupsSelected}
@@ -5726,17 +7145,13 @@ export default function App() {
                                             aria-label={`Select all seat groups for ${event.event}`}
                                           />
                                         </TableHead>
-                                        <TableHead className="w-[180px] whitespace-nowrap">Seat Group</TableHead>
-                                        <TableHead className="w-[150px] whitespace-nowrap">Original Price</TableHead>
-                                        <TableHead className="w-[220px] whitespace-nowrap">Current Price</TableHead>
-                                        <TableHead className="w-[110px] whitespace-nowrap">
-                                          <RealtimeColumnLabel>% Sold</RealtimeColumnLabel>
-                                        </TableHead>
-                                        <TableHead className="w-[160px] whitespace-nowrap">
-                                          <RealtimeColumnLabel>Tickets Remaining</RealtimeColumnLabel>
-                                        </TableHead>
-                                        <TableHead className="w-[160px] whitespace-nowrap">Proj. Revenue</TableHead>
-                                        <TableHead className="w-[120px] whitespace-nowrap">Yield</TableHead>
+                                        <TableHead className="w-[120px] whitespace-nowrap">Seat Group</TableHead>
+                                        <TableHead className="w-[100px] whitespace-nowrap">Original Price</TableHead>
+                                        <TableHead className="w-[130px] whitespace-nowrap">Current Price</TableHead>
+                                        <TableHead className="w-[100px] whitespace-nowrap text-center">% Sold</TableHead>
+                                        <TableHead className="w-[80px] whitespace-nowrap">Tkt Rem.</TableHead>
+                                        <TableHead className="w-[110px] whitespace-nowrap">Proj. Revenue</TableHead>
+                                        <TableHead className="w-[80px] whitespace-nowrap">Yield</TableHead>
                                       </TableRow>
                                     </TableHeader>
 
@@ -5849,7 +7264,7 @@ export default function App() {
                                                   beginSeatCellEdit(event.id, seatGroup, "currentPrice")
                                                 }
                                                 className={cn(
-                                                  "rounded px-1 text-left font-medium",
+                                                  "rounded px-1 text-left",
                                                   isSeatPriceDirty ? "text-orange-500" : "text-foreground",
                                                 )}
                                                 aria-label={`Edit current price for ${seatGroup.name}`}
@@ -5895,7 +7310,7 @@ export default function App() {
                                             </div>
                                           </div>
                                         </TableCell>
-                                        <TableCell>{formatPercent(seatGroup.soldPct)}</TableCell>
+                                        <TableCell className="text-center"><SellThroughBar pct={seatGroup.soldPct} compact /></TableCell>
                                         <TableCell>{seatGroup.ticketsRemaining}</TableCell>
                                         <TableCell>{formatCurrency(seatGroup.projectedRevenue)}</TableCell>
                                         <TableCell>{formatCurrency(seatGroup.yield)}</TableCell>
@@ -5926,9 +7341,6 @@ export default function App() {
         stagedCount={pendingChanges.total}
         onDiscard={onDiscardChanges}
         onPublish={onPublishChanges}
-        extraActionLabel="Review Recommendations"
-        onExtraAction={openRecommendedReviewModal}
-        extraActionDisabled={recommendedReviewChangeRows.length === 0}
       />
     </div>
   );
