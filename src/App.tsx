@@ -6126,28 +6126,29 @@ export default function App() {
                       onApply={applyBulkEventEdits}
                       onPublish={() => { applyBulkEventEdits(); setShowPublishOverlay(true); }}
                     />
-                    {(() => {
-                      const activeEvent = activeBulkEditEventId ? draftEvents.find((e) => e.id === activeBulkEditEventId) ?? null : null;
-                      const activeSeatGroups = activeEvent ? activeEvent.seatGroups.filter((sg) => (selectedSeatGroupsByEvent[activeBulkEditEventId!] ?? []).includes(sg.id)) : [];
-                      return (
-                        <BulkEditSeatGroupsModal
-                          open={activeBulkEditEventId !== null}
-                          eventName={activeEvent?.event ?? ""}
-                          selectedSeatGroups={activeSeatGroups}
-                          values={bulkSeatModalValues[activeBulkEditEventId ?? ""] ?? {}}
-                          modes={bulkSeatModalModes[activeBulkEditEventId ?? ""] ?? {}}
-                          onClose={() => setActiveBulkEditEventId(null)}
-                          onSetValue={(field, value) => setBulkSeatModalValues((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: value } }))}
-                          onSetMode={(field, mode) => setBulkSeatModalModes((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: mode } }))}
-                          onApply={() => applyBulkSeatModalEdit(activeBulkEditEventId!)}
-                          onPublish={() => { applyBulkSeatModalEdit(activeBulkEditEventId!); setShowPublishOverlay(true); }}
-                        />
-                      );
-                    })()}
                   </div>
                 )}
               </div>
             </div>
+
+            {(() => {
+              const activeEvent = activeBulkEditEventId ? draftEvents.find((e) => e.id === activeBulkEditEventId) ?? null : null;
+              const activeSeatGroups = activeEvent ? activeEvent.seatGroups.filter((sg) => (selectedSeatGroupsByEvent[activeBulkEditEventId!] ?? []).includes(sg.id)) : [];
+              return (
+                <BulkEditSeatGroupsModal
+                  open={activeBulkEditEventId !== null}
+                  eventName={activeEvent?.event ?? ""}
+                  selectedSeatGroups={activeSeatGroups}
+                  values={bulkSeatModalValues[activeBulkEditEventId ?? ""] ?? {}}
+                  modes={bulkSeatModalModes[activeBulkEditEventId ?? ""] ?? {}}
+                  onClose={() => setActiveBulkEditEventId(null)}
+                  onSetValue={(field, value) => setBulkSeatModalValues((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: value } }))}
+                  onSetMode={(field, mode) => setBulkSeatModalModes((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: mode } }))}
+                  onApply={() => applyBulkSeatModalEdit(activeBulkEditEventId!)}
+                  onPublish={() => { applyBulkSeatModalEdit(activeBulkEditEventId!); setShowPublishOverlay(true); }}
+                />
+              );
+            })()}
 
             <div className="overflow-auto max-h-[calc(100vh-280px)]">
               <Table className="table-fixed" wrapperClassName="overflow-visible">
@@ -6772,28 +6773,29 @@ export default function App() {
                     onApply={applyBulkEventEdits}
                     onPublish={() => { applyBulkEventEdits(); setShowPublishOverlay(true); }}
                   />
-                  {(() => {
-                    const activeEvent = activeBulkEditEventId ? draftEvents.find((e) => e.id === activeBulkEditEventId) ?? null : null;
-                    const activeSeatGroups = activeEvent ? activeEvent.seatGroups.filter((sg) => (selectedSeatGroupsByEvent[activeBulkEditEventId!] ?? []).includes(sg.id)) : [];
-                    return (
-                      <BulkEditSeatGroupsModal
-                        open={activeBulkEditEventId !== null}
-                        eventName={activeEvent?.event ?? ""}
-                        selectedSeatGroups={activeSeatGroups}
-                        values={bulkSeatModalValues[activeBulkEditEventId ?? ""] ?? {}}
-                        modes={bulkSeatModalModes[activeBulkEditEventId ?? ""] ?? {}}
-                        onClose={() => setActiveBulkEditEventId(null)}
-                        onSetValue={(field, value) => setBulkSeatModalValues((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: value } }))}
-                        onSetMode={(field, mode) => setBulkSeatModalModes((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: mode } }))}
-                        onApply={() => applyBulkSeatModalEdit(activeBulkEditEventId!)}
-                        onPublish={() => { applyBulkSeatModalEdit(activeBulkEditEventId!); setShowPublishOverlay(true); }}
-                      />
-                    );
-                  })()}
                 </div>
               )}
             </div>
           </div>
+
+          {(() => {
+            const activeEvent = activeBulkEditEventId ? draftEvents.find((e) => e.id === activeBulkEditEventId) ?? null : null;
+            const activeSeatGroups = activeEvent ? activeEvent.seatGroups.filter((sg) => (selectedSeatGroupsByEvent[activeBulkEditEventId!] ?? []).includes(sg.id)) : [];
+            return (
+              <BulkEditSeatGroupsModal
+                open={activeBulkEditEventId !== null}
+                eventName={activeEvent?.event ?? ""}
+                selectedSeatGroups={activeSeatGroups}
+                values={bulkSeatModalValues[activeBulkEditEventId ?? ""] ?? {}}
+                modes={bulkSeatModalModes[activeBulkEditEventId ?? ""] ?? {}}
+                onClose={() => setActiveBulkEditEventId(null)}
+                onSetValue={(field, value) => setBulkSeatModalValues((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: value } }))}
+                onSetMode={(field, mode) => setBulkSeatModalModes((c) => ({ ...c, [activeBulkEditEventId!]: { ...(c[activeBulkEditEventId!] ?? {}), [field]: mode } }))}
+                onApply={() => applyBulkSeatModalEdit(activeBulkEditEventId!)}
+                onPublish={() => { applyBulkSeatModalEdit(activeBulkEditEventId!); setShowPublishOverlay(true); }}
+              />
+            );
+          })()}
 
           <div className="overflow-auto max-h-[calc(100vh-280px)]">
             <Table className="table-fixed" wrapperClassName="overflow-visible">
