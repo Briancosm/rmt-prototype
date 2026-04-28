@@ -6329,7 +6329,29 @@ export default function App() {
                                                 )}
                                               </TableCell>
                                               <TableCell className="text-center">
-                                                {formatCurrency(seatGroup.currentPrice)}
+                                                {editingSeatCell?.eventId === event.id && editingSeatCell.seatGroupId === seatGroup.id && editingSeatCell.field === "currentPrice" ? (
+                                                  <Input
+                                                    type="number"
+                                                    inputMode="decimal"
+                                                    step="0.01"
+                                                    autoFocus
+                                                    value={editingSeatValue}
+                                                    onChange={(e) => setEditingSeatValue(e.target.value)}
+                                                    onKeyDown={(e) => { if (e.key === "Enter") commitSeatCellEdit(); if (e.key === "Escape") cancelSeatPriceEdit(); }}
+                                                    onBlur={cancelSeatPriceEdit}
+                                                    className="h-8 w-[100px] bg-background mx-auto"
+                                                    aria-label={`Ticket price for ${seatGroup.name}`}
+                                                  />
+                                                ) : (
+                                                  <button
+                                                    type="button"
+                                                    onDoubleClick={() => beginSeatCellEdit(event.id, seatGroup, "currentPrice")}
+                                                    className={cn("rounded px-1 font-medium", isSeatPriceDirty ? "text-orange-500" : "text-foreground")}
+                                                    aria-label={`Edit ticket price for ${seatGroup.name}`}
+                                                  >
+                                                    {formatCurrency(seatGroup.currentPrice)}
+                                                  </button>
+                                                )}
                                               </TableCell>
                                               <TableCell className="text-center">
                                                 {sgSold !== null ? formatWholeNumber(sgSold) : "--"}
