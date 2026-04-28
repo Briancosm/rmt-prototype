@@ -6082,7 +6082,7 @@ export default function App() {
                                 aria-label={`Select ${event.event}`}
                               />
                               <div className="min-w-0">
-                                <p className="max-w-[540px] whitespace-normal text-sm leading-tight">{event.event}</p>
+                                <p className="max-w-[540px] whitespace-normal text-xs leading-tight">{event.event}</p>
                                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                                   <p className="text-xs text-muted-foreground">{event.venueName}</p>
                                   {isPendingPublish && (
@@ -6805,7 +6805,7 @@ export default function App() {
                             />
 
                             <div className="min-w-0">
-                              <p className="max-w-[540px] whitespace-normal text-sm leading-tight">
+                              <p className="max-w-[540px] whitespace-normal text-xs leading-tight">
                                 {event.event}
                               </p>
                               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
