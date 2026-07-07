@@ -11,8 +11,20 @@ interface CheckboxProps
 }
 
 const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
-  ({ checked, indeterminate = false, onCheckedChange, className, disabled, ...props }, ref) => {
+  (
+    { checked, indeterminate = false, onCheckedChange, className, disabled, onClick, ...props },
+    ref,
+  ) => {
     const isActive = checked || indeterminate;
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+      onClick?.(event);
+
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      onCheckedChange?.(!(checked && !indeterminate));
+    };
 
     return (
       <button
@@ -22,7 +34,7 @@ const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
         role="checkbox"
         aria-checked={indeterminate ? "mixed" : checked}
         disabled={disabled}
-        onClick={() => onCheckedChange?.(!(checked && !indeterminate))}
+        onClick={handleClick}
         className={cn(
           "inline-flex h-4 w-4 min-h-4 min-w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
           isActive

@@ -7,8 +7,9 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        heading: ["'Space Grotesk'", "sans-serif"],
-        body: ["'Source Sans 3'", "sans-serif"],
+        heading: ["'Geist'", "sans-serif"],
+        body: ["'Geist'", "sans-serif"],
+        mono: ["'Geist Mono'", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",

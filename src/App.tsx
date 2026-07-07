@@ -7,6 +7,7 @@ import {
   ArrowUp,
   ArrowUpDown,
   Check,
+  ChevronDown,
   ChevronRight,
   MoreHorizontal,
   Pencil,
@@ -40,6 +41,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { EventReportingDeepDive } from "@/components/EventReporting/EventReportingDeepDive";
+import { PortfolioReportingPage } from "@/components/PortfolioReporting/PortfolioReportingPage";
+import { generatePortfolioEvents } from "@/mocks/portfolioEventPool";
 
 type EventStatus = "On Sale" | "Unpublished";
 type AttentionFlag = "underperforming" | null;
@@ -73,6 +77,7 @@ interface SeatGroup {
   ticketsRemaining: number;
   projectedRevenue: number;
   yield: number;
+  lastPriceChangedAt?: string;
 }
 
 interface EventRecord {
@@ -116,6 +121,7 @@ interface EventRecord {
   fcrVsExpectedPct: number | null;
   status: EventStatus;
   attention: AttentionFlag;
+  lastPriceChangedAt?: string;
   seatGroups: SeatGroup[];
 }
 
@@ -160,6 +166,7 @@ const initialEvents: EventRecord[] = [
     fcrPct: 4.5,
     fcrVsExpectedPct: 10,
     status: "On Sale",
+    lastPriceChangedAt: "2025-10-18T14:30:00",
     attention: "underperforming",
     seatGroups: [
       {
@@ -172,6 +179,7 @@ const initialEvents: EventRecord[] = [
         ticketsRemaining: 18,
         projectedRevenue: 400,
         yield: 250,
+        lastPriceChangedAt: "2025-10-18T14:30:00",
       },
       {
         id: "sg-2",
@@ -183,6 +191,7 @@ const initialEvents: EventRecord[] = [
         ticketsRemaining: 25,
         projectedRevenue: 400,
         yield: 250,
+        lastPriceChangedAt: "2025-10-18T14:31:00",
       },
       {
         id: "sg-3",
@@ -194,6 +203,7 @@ const initialEvents: EventRecord[] = [
         ticketsRemaining: 10,
         projectedRevenue: 400,
         yield: 250,
+        lastPriceChangedAt: "2025-10-17T09:15:00",
       },
       {
         id: "sg-4",
@@ -205,6 +215,7 @@ const initialEvents: EventRecord[] = [
         ticketsRemaining: 10,
         projectedRevenue: 400,
         yield: 250,
+        lastPriceChangedAt: "2025-10-17T09:16:00",
       },
       {
         id: "sg-5",
@@ -216,6 +227,7 @@ const initialEvents: EventRecord[] = [
         ticketsRemaining: 18,
         projectedRevenue: 400,
         yield: 250,
+        lastPriceChangedAt: "2025-10-16T11:00:00",
       },
     ],
   },
@@ -358,6 +370,7 @@ const initialEvents: EventRecord[] = [
     fcrPct: 5.1,
     fcrVsExpectedPct: 14,
     status: "On Sale",
+    lastPriceChangedAt: "2025-10-17T09:15:00",
     attention: null,
     seatGroups: [
       {
@@ -655,12 +668,13 @@ const initialEvents: EventRecord[] = [
     fcrPct: 4.8,
     fcrVsExpectedPct: 12,
     status: "On Sale" as const,
+    lastPriceChangedAt: "2025-10-19T11:45:00",
     attention: null,
     seatGroups: [
-      { id: "sg-26", name: "Entertainment A", originalPrice: 48, currentPrice: 52, recTicketPrice: 58, soldPct: 82, ticketsRemaining: 10, projectedRevenue: 520, yield: 310 },
-      { id: "sg-27", name: "Entertainment B", originalPrice: 40, currentPrice: 44, recTicketPrice: 50, soldPct: 76, ticketsRemaining: 14, projectedRevenue: 440, yield: 268 },
-      { id: "sg-28", name: "Entertainment C", originalPrice: 32, currentPrice: 36, recTicketPrice: 42, soldPct: 68, ticketsRemaining: 20, projectedRevenue: 360, yield: 218 },
-      { id: "sg-29", name: "GA", originalPrice: 25, currentPrice: 28, recTicketPrice: 34, soldPct: 70, ticketsRemaining: 18, projectedRevenue: 280, yield: 175 },
+      { id: "sg-26", name: "Entertainment A", originalPrice: 48, currentPrice: 52, recTicketPrice: 58, soldPct: 82, ticketsRemaining: 10, projectedRevenue: 520, yield: 310, lastPriceChangedAt: "2025-10-19T11:45:00" },
+      { id: "sg-27", name: "Entertainment B", originalPrice: 40, currentPrice: 44, recTicketPrice: 50, soldPct: 76, ticketsRemaining: 14, projectedRevenue: 440, yield: 268, lastPriceChangedAt: "2025-10-19T11:46:00" },
+      { id: "sg-28", name: "Entertainment C", originalPrice: 32, currentPrice: 36, recTicketPrice: 42, soldPct: 68, ticketsRemaining: 20, projectedRevenue: 360, yield: 218, lastPriceChangedAt: "2025-10-19T11:47:00" },
+      { id: "sg-29", name: "GA", originalPrice: 25, currentPrice: 28, recTicketPrice: 34, soldPct: 70, ticketsRemaining: 18, projectedRevenue: 280, yield: 175, lastPriceChangedAt: "2025-10-19T11:48:00" },
     ],
   },
   {
@@ -703,13 +717,14 @@ const initialEvents: EventRecord[] = [
     fcrPct: 6.2,
     fcrVsExpectedPct: 22,
     status: "On Sale" as const,
+    lastPriceChangedAt: "2025-10-20T16:00:00",
     attention: null,
     seatGroups: [
-      { id: "sg-30", name: "Entertainment A", originalPrice: 65, currentPrice: 70, recTicketPrice: 75, soldPct: 94, ticketsRemaining: 4, projectedRevenue: 700, yield: 420 },
-      { id: "sg-31", name: "Entertainment B", originalPrice: 52, currentPrice: 58, recTicketPrice: 64, soldPct: 89, ticketsRemaining: 8, projectedRevenue: 580, yield: 345 },
-      { id: "sg-32", name: "Entertainment C", originalPrice: 44, currentPrice: 48, recTicketPrice: 55, soldPct: 85, ticketsRemaining: 11, projectedRevenue: 480, yield: 290 },
-      { id: "sg-33", name: "Entertainment D", originalPrice: 35, currentPrice: 39, recTicketPrice: 46, soldPct: 80, ticketsRemaining: 16, projectedRevenue: 390, yield: 234 },
-      { id: "sg-34", name: "GA", originalPrice: 28, currentPrice: 32, recTicketPrice: 38, soldPct: 82, ticketsRemaining: 12, projectedRevenue: 320, yield: 198 },
+      { id: "sg-30", name: "Entertainment A", originalPrice: 65, currentPrice: 70, recTicketPrice: 75, soldPct: 94, ticketsRemaining: 4, projectedRevenue: 700, yield: 420, lastPriceChangedAt: "2025-10-20T16:00:00" },
+      { id: "sg-31", name: "Entertainment B", originalPrice: 52, currentPrice: 58, recTicketPrice: 64, soldPct: 89, ticketsRemaining: 8, projectedRevenue: 580, yield: 345, lastPriceChangedAt: "2025-10-20T16:01:00" },
+      { id: "sg-32", name: "Entertainment C", originalPrice: 44, currentPrice: 48, recTicketPrice: 55, soldPct: 85, ticketsRemaining: 11, projectedRevenue: 480, yield: 290, lastPriceChangedAt: "2025-10-20T16:02:00" },
+      { id: "sg-33", name: "Entertainment D", originalPrice: 35, currentPrice: 39, recTicketPrice: 46, soldPct: 80, ticketsRemaining: 16, projectedRevenue: 390, yield: 234, lastPriceChangedAt: "2025-10-20T16:03:00" },
+      { id: "sg-34", name: "GA", originalPrice: 28, currentPrice: 32, recTicketPrice: 38, soldPct: 82, ticketsRemaining: 12, projectedRevenue: 320, yield: 198, lastPriceChangedAt: "2025-10-20T16:04:00" },
     ],
   },
   {
@@ -848,13 +863,14 @@ const initialEvents: EventRecord[] = [
     fcrPct: 4.4,
     fcrVsExpectedPct: 7,
     status: "On Sale" as const,
+    lastPriceChangedAt: "2025-10-21T10:20:00",
     attention: null,
     seatGroups: [
-      { id: "sg-43", name: "Sports A", originalPrice: 45, currentPrice: 50, recTicketPrice: 60, soldPct: 75, ticketsRemaining: 14, projectedRevenue: 500, yield: 298 },
-      { id: "sg-44", name: "Sports B", originalPrice: 42, currentPrice: 48, recTicketPrice: 58, soldPct: 68, ticketsRemaining: 18, projectedRevenue: 480, yield: 278 },
-      { id: "sg-45", name: "Sports C", originalPrice: 38, currentPrice: 42, recTicketPrice: 52, soldPct: 60, ticketsRemaining: 22, projectedRevenue: 420, yield: 248 },
-      { id: "sg-46", name: "Sports D", originalPrice: 35, currentPrice: 39, recTicketPrice: 48, soldPct: 55, ticketsRemaining: 20, projectedRevenue: 390, yield: 228 },
-      { id: "sg-47", name: "GA", originalPrice: 30, currentPrice: 34, recTicketPrice: 42, soldPct: 62, ticketsRemaining: 24, projectedRevenue: 340, yield: 205 },
+      { id: "sg-43", name: "Sports A", originalPrice: 45, currentPrice: 50, recTicketPrice: 60, soldPct: 75, ticketsRemaining: 14, projectedRevenue: 500, yield: 298, lastPriceChangedAt: "2025-10-21T10:20:00" },
+      { id: "sg-44", name: "Sports B", originalPrice: 42, currentPrice: 48, recTicketPrice: 58, soldPct: 68, ticketsRemaining: 18, projectedRevenue: 480, yield: 278, lastPriceChangedAt: "2025-10-21T10:21:00" },
+      { id: "sg-45", name: "Sports C", originalPrice: 38, currentPrice: 42, recTicketPrice: 52, soldPct: 60, ticketsRemaining: 22, projectedRevenue: 420, yield: 248, lastPriceChangedAt: "2025-10-21T10:22:00" },
+      { id: "sg-46", name: "Sports D", originalPrice: 35, currentPrice: 39, recTicketPrice: 48, soldPct: 55, ticketsRemaining: 20, projectedRevenue: 390, yield: 228, lastPriceChangedAt: "2025-10-21T10:23:00" },
+      { id: "sg-47", name: "GA", originalPrice: 30, currentPrice: 34, recTicketPrice: 42, soldPct: 62, ticketsRemaining: 24, projectedRevenue: 340, yield: 205, lastPriceChangedAt: "2025-10-21T10:24:00" },
     ],
   },
   {
@@ -946,13 +962,14 @@ const initialEvents: EventRecord[] = [
     fcrPct: 5.0,
     fcrVsExpectedPct: 11,
     status: "On Sale" as const,
+    lastPriceChangedAt: "2025-10-22T08:45:00",
     attention: null,
     seatGroups: [
-      { id: "sg-53", name: "Sports A", originalPrice: 44, currentPrice: 49, recTicketPrice: 57, soldPct: 78, ticketsRemaining: 12, projectedRevenue: 490, yield: 288 },
-      { id: "sg-54", name: "Sports B", originalPrice: 41, currentPrice: 46, recTicketPrice: 54, soldPct: 72, ticketsRemaining: 16, projectedRevenue: 460, yield: 270 },
-      { id: "sg-55", name: "Sports C", originalPrice: 38, currentPrice: 42, recTicketPrice: 50, soldPct: 65, ticketsRemaining: 20, projectedRevenue: 420, yield: 248 },
-      { id: "sg-56", name: "Sports D", originalPrice: 36, currentPrice: 40, recTicketPrice: 48, soldPct: 68, ticketsRemaining: 15, projectedRevenue: 400, yield: 238 },
-      { id: "sg-57", name: "GA", originalPrice: 30, currentPrice: 34, recTicketPrice: 41, soldPct: 64, ticketsRemaining: 22, projectedRevenue: 340, yield: 205 },
+      { id: "sg-53", name: "Sports A", originalPrice: 44, currentPrice: 49, recTicketPrice: 57, soldPct: 78, ticketsRemaining: 12, projectedRevenue: 490, yield: 288, lastPriceChangedAt: "2025-10-22T08:45:00" },
+      { id: "sg-54", name: "Sports B", originalPrice: 41, currentPrice: 46, recTicketPrice: 54, soldPct: 72, ticketsRemaining: 16, projectedRevenue: 460, yield: 270, lastPriceChangedAt: "2025-10-22T08:46:00" },
+      { id: "sg-55", name: "Sports C", originalPrice: 38, currentPrice: 42, recTicketPrice: 50, soldPct: 65, ticketsRemaining: 20, projectedRevenue: 420, yield: 248, lastPriceChangedAt: "2025-10-22T08:47:00" },
+      { id: "sg-56", name: "Sports D", originalPrice: 36, currentPrice: 40, recTicketPrice: 48, soldPct: 68, ticketsRemaining: 15, projectedRevenue: 400, yield: 238, lastPriceChangedAt: "2025-10-22T08:48:00" },
+      { id: "sg-57", name: "GA", originalPrice: 30, currentPrice: 34, recTicketPrice: 41, soldPct: 64, ticketsRemaining: 22, projectedRevenue: 340, yield: 205, lastPriceChangedAt: "2025-10-22T08:49:00" },
     ],
   },
 ];
@@ -960,8 +977,8 @@ const initialEvents: EventRecord[] = [
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
 });
 
 const statusFilterOptions: { label: string; value: FilterValue }[] = [
@@ -973,10 +990,10 @@ const statusFilterOptions: { label: string; value: FilterValue }[] = [
 
 const sortLabelMap: Record<SortKey, string> = {
   event: "Event",
-  startTime: "Start Time",
+  startTime: "Start",
   domeAtp: "Dome ATP",
   recAtp: "Rec. ATP",
-  soldPct: "% Sold",
+  soldPct: "%",
   daysRemaining: "Days Remaining",
   projectedRevenue: "Proj. Revenue",
   status: "Status",
@@ -990,11 +1007,24 @@ function cloneEvents(events: EventRecord[]): EventRecord[] {
   }));
 }
 
+function formatLastChange(iso: string | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const yr = String(d.getFullYear()).slice(2);
+  const h = d.getHours();
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const suffix = h >= 12 ? "p" : "a";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${m}/${day}/${yr} ${h12}:${min}${suffix}`;
+}
+
 function formatCurrency(value: number | null): string {
   if (value === null) {
     return "--";
   }
-  return currencyFormatter.format(value);
+  return currencyFormatter.format(Math.ceil(value));
 }
 
 function formatWholeNumber(value: number | null): string {
@@ -1082,14 +1112,29 @@ function projectSellthroughMetric(
   return roundTo(clamp(actualPct + projectionLift * multiplier, 0, 100), 1);
 }
 
+const CITY_ABBREV: Record<string, string> = {
+  "Los Angeles": "LA",
+  "Cleveland": "CLE",
+  "Atlanta": "ATL",
+  "Dallas": "DAL",
+  "Chicago": "CHI",
+  "New York": "NYC",
+  "Golden State": "GS",
+};
+
+function abbreviateCity(name: string): string {
+  return CITY_ABBREV[name] ?? name;
+}
+
 function getVenueTimezone(venueName: string): string {
   const map: Record<string, string> = {
-    "Los Angeles": "PST",
-    "Cleveland": "EST",
-    "Atlanta": "EST",
-    "New York": "EST",
-    "Chicago": "CST",
-    "Golden State": "PST",
+    "Los Angeles": "PT",
+    "Cleveland": "ET",
+    "Atlanta": "ET",
+    "Dallas": "CT",
+    "New York": "ET",
+    "Chicago": "CT",
+    "Golden State": "PT",
   };
   return map[venueName] ?? "";
 }
@@ -1112,7 +1157,60 @@ function formatSeatGroupPriceRange(
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
 
-  return `${formatCurrency(minimum)} - ${formatCurrency(maximum)}`;
+  return `${formatCurrency(maximum)} - ${formatCurrency(minimum)}`;
+}
+
+function getSoldBreakdown(sold: number | null, event: EventRecord): {
+  groupSales: number | null;
+  consumer: number | null;
+} {
+  if (sold === null) return { groupSales: null, consumer: null };
+  const groupRatio = clamp(
+    0.24 + ((event.hallSoldPct ?? event.soldPct ?? 50) - 50) / 250,
+    0.18,
+    0.46,
+  );
+  const groupSales = Math.round(sold * groupRatio);
+  return { groupSales, consumer: sold - groupSales };
+}
+
+function SoldAvailCell({
+  sold,
+  avail,
+  event,
+  className,
+}: {
+  sold: number | null;
+  avail: number | null;
+  event: EventRecord;
+  className?: string;
+}) {
+  if (sold === null || avail === null) {
+    return <TableCell className={cn("text-center tabular-nums", className)}>--</TableCell>;
+  }
+  const { groupSales, consumer } = getSoldBreakdown(sold, event);
+  return (
+    <TableCell className={cn("text-center tabular-nums", className)}>
+      <div className="group relative inline-flex">
+        <span className="cursor-help underline decoration-dotted underline-offset-4 transition-colors hover:text-primary focus:outline-none">
+          {formatWholeNumber(sold)} / {formatWholeNumber(avail)}
+        </span>
+        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-[200px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 text-left shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+          <p className="mb-2 text-xs font-semibold text-foreground">Sold Breakdown</p>
+          <ul className="space-y-1.5">
+            <li className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-foreground">Group Sales</span>
+              <span className="text-muted-foreground">{formatWholeNumber(groupSales)}</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-foreground">Consumer</span>
+              <span className="text-muted-foreground">{formatWholeNumber(consumer)}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </TableCell>
+  );
 }
 
 function getNetTicketRevenueBreakdown(event: EventRecord): {
@@ -1251,20 +1349,47 @@ function getAttentionSummary(event: EventRecord): string {
   return "Multiple performance indicators are trailing expectations; review pricing and demand metrics for this event.";
 }
 
-function attentionBadge(event: EventRecord) {
-  if (event.attention !== "underperforming") {
-    return null;
+
+function EventHealthBadge({ score, event }: { score: number | null; event?: EventRecord }) {
+  if (score === null) return <span className="text-muted-foreground text-sm">--</span>;
+  const { bg, text, ring } =
+    score >= 76
+      ? { bg: "bg-emerald-100", text: "text-emerald-700", ring: "ring-1 ring-emerald-300" }
+      : score >= 51
+      ? { bg: "bg-blue-100", text: "text-blue-700", ring: "ring-1 ring-blue-300" }
+      : score >= 26
+      ? { bg: "bg-amber-100", text: "text-amber-700", ring: "ring-1 ring-amber-300" }
+      : { bg: "bg-red-100", text: "text-red-700", ring: "ring-1 ring-red-300" };
+
+  const isUnderperforming = event?.attention === "underperforming";
+  const reasons = isUnderperforming ? getAttentionReasons(event!) : [];
+  const summary = isUnderperforming ? getAttentionSummary(event!) : "";
+
+  if (!isUnderperforming) {
+    return (
+      <div
+        className={cn(
+          "inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-normal",
+          bg, text, ring,
+        )}
+      >
+        {score}
+      </div>
+    );
   }
 
-  const reasons = getAttentionReasons(event);
-  const summary = getAttentionSummary(event);
-
   return (
-    <span className="group/attn relative ml-1.5 shrink-0">
-      <span className="inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full bg-warning/15 text-warning">
-        <AlertTriangle className="h-3.5 w-3.5" />
-      </span>
-      <div className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 w-[320px] rounded-lg border border-border/80 bg-card p-3 opacity-0 shadow-xl transition-opacity group-hover/attn:pointer-events-auto group-hover/attn:opacity-100">
+    <div className="group/health relative inline-block">
+      <div
+        className={cn(
+          "inline-flex h-8 w-8 cursor-help items-center justify-center rounded-full text-xs font-normal ring-2 ring-offset-1",
+          bg, text,
+          "ring-warning/60",
+        )}
+      >
+        {score}
+      </div>
+      <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 w-[320px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 opacity-0 shadow-xl transition-opacity group-hover/health:pointer-events-auto group-hover/health:opacity-100 text-left">
         <p className="mb-2 text-xs font-semibold text-foreground">Flagged Metrics</p>
         <ul className="space-y-1.5">
           {reasons.map((r) => (
@@ -1281,28 +1406,6 @@ function attentionBadge(event: EventRecord) {
           {summary}
         </p>
       </div>
-    </span>
-  );
-}
-
-function EventHealthBadge({ score }: { score: number | null }) {
-  if (score === null) return <span className="text-muted-foreground text-sm">--</span>;
-  const { bg, text, ring } =
-    score >= 76
-      ? { bg: "bg-emerald-100", text: "text-emerald-700", ring: "ring-1 ring-emerald-300" }
-      : score >= 51
-      ? { bg: "bg-blue-100", text: "text-blue-700", ring: "ring-1 ring-blue-300" }
-      : score >= 26
-      ? { bg: "bg-amber-100", text: "text-amber-700", ring: "ring-1 ring-amber-300" }
-      : { bg: "bg-red-100", text: "text-red-700", ring: "ring-1 ring-red-300" };
-  return (
-    <div
-      className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-normal",
-        bg, text, ring,
-      )}
-    >
-      {score}
     </div>
   );
 }
@@ -1862,14 +1965,15 @@ function BulkEditEventsModal({
               </tr>
             </thead>
             <tbody>
-              {(["seatGroup"] as const).map((group) => {
+              {(["event", "seatGroup"] as const).map((group) => {
                 const fields = sharedFields.filter((f) => f.group === group);
                 if (fields.length === 0) return null;
+                const groupLabel = group === "event" ? "Event Settings" : "Seat Groups";
                 return (
                   <Fragment key={group}>
                     <tr className="border-b border-border/40 bg-secondary/10">
                       <td colSpan={4} className="px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        {"Seat Groups"}
+                        {groupLabel}
                       </td>
                     </tr>
                     {fields.map((field) => {
@@ -1975,6 +2079,188 @@ function BulkEditEventsModal({
           <Button onClick={onPublish} disabled={readyFields.length === 0}>
             Publish Changes
           </Button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function WeekdayFilterDropdown({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (days: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggle = (day: string) =>
+    onChange(selected.includes(day) ? selected.filter((d) => d !== day) : [...selected, day]);
+
+  const label =
+    selected.length === 0
+      ? "All"
+      : selected.length === 1
+        ? selected[0].slice(0, 3)
+        : `${selected.length} days`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "flex h-7 items-center gap-1 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-colors",
+          selected.length > 0 && "border-primary/50 bg-primary/5 text-primary",
+        )}
+      >
+        {label}
+        <ChevronDown className={cn("h-3 w-3 opacity-50 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-50 min-w-[150px] rounded-lg border border-border/70 bg-popover py-1 shadow-lg">
+          {WEEKDAYS.map((day) => (
+            <label
+              key={day}
+              className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 hover:bg-muted/50"
+            >
+              <Checkbox
+                checked={selected.includes(day)}
+                onCheckedChange={() => toggle(day)}
+                aria-label={day}
+              />
+              <span className="text-xs">{day}</span>
+            </label>
+          ))}
+          {selected.length > 0 && (
+            <>
+              <div className="my-1 h-px bg-border/60" />
+              <button
+                type="button"
+                onClick={() => { onChange([]); setOpen(false); }}
+                className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              >
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const PRICE_TIERS = ["S11", "S12", "S13", "S14"];
+
+function PriceTierFilterDropdown({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (tiers: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggle = (tier: string) =>
+    onChange(selected.includes(tier) ? selected.filter((t) => t !== tier) : [...selected, tier]);
+
+  const label =
+    selected.length === 0
+      ? "All"
+      : selected.length === 1
+        ? selected[0]
+        : `${selected.length} tiers`;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "flex h-7 items-center gap-1 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition-colors",
+          selected.length > 0 && "border-primary/50 bg-primary/5 text-primary",
+        )}
+      >
+        {label}
+        <ChevronDown className={cn("h-3 w-3 opacity-50 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-50 min-w-[120px] rounded-lg border border-border/70 bg-popover py-1 shadow-lg">
+          {PRICE_TIERS.map((tier) => (
+            <label
+              key={tier}
+              className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 hover:bg-muted/50"
+            >
+              <Checkbox
+                checked={selected.includes(tier)}
+                onCheckedChange={() => toggle(tier)}
+                aria-label={tier}
+              />
+              <span className="text-xs">{tier}</span>
+            </label>
+          ))}
+          {selected.length > 0 && (
+            <>
+              <div className="my-1 h-px bg-border/60" />
+              <button
+                type="button"
+                onClick={() => { onChange([]); setOpen(false); }}
+                className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              >
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PriceChangeWarningModal({
+  warning,
+  onDismiss,
+}: {
+  warning: { message: string; onConfirm: () => void; title?: string } | null;
+  onDismiss: () => void;
+}) {
+  if (!warning) return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/45 px-4">
+      <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+          <div>
+            <h2 className="font-semibold text-foreground">{warning.title ?? "Large Price Change"}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{warning.message}</p>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onDismiss}>Cancel</Button>
+          <Button size="sm" onClick={() => { warning.onConfirm(); onDismiss(); }}>Confirm</Button>
         </div>
       </div>
     </div>,
@@ -2868,7 +3154,7 @@ function formatCompactDateTime(value: number): string {
 
 function formatStartDate(value: number): string {
   const d = new Date(value);
-  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
 }
 
 function formatStartTime(value: number): string {
@@ -3047,7 +3333,6 @@ function buildComparisonChartGeometry(
   };
 }
 
-type ReportingTab = "performance" | "pricing-details";
 type PerformanceMetricView = "revenue" | "funnel-entries" | "funnel-completion" | "sold" | "roas";
 
 function EventRoutePlaceholder({
@@ -3114,7 +3399,6 @@ function EventReportingDashboard({
   const [showRecommendedReviewModal, setShowRecommendedReviewModal] = useState(false);
   const [recommendedReviewValuesById, setRecommendedReviewValuesById] = useState<Record<string, string>>({});
   const [pricingRecommendationUndoById, setPricingRecommendationUndoById] = useState<Record<string, number>>({});
-  const [activeTab, setActiveTab] = useState<ReportingTab>("performance");
   const [activePerformanceMetric, setActivePerformanceMetric] = useState<PerformanceMetricView>("revenue");
   const [editingPricingRowId, setEditingPricingRowId] = useState<string | null>(null);
   const [editingPricingValue, setEditingPricingValue] = useState<string>("");
@@ -3135,7 +3419,6 @@ function EventReportingDashboard({
     setShowRecommendedReviewModal(false);
     setRecommendedReviewValuesById({});
     setPricingRecommendationUndoById({});
-    setActiveTab("performance");
     setActivePerformanceMetric("revenue");
     setEditingPricingRowId(null);
     setEditingPricingValue("");
@@ -3402,10 +3685,10 @@ function EventReportingDashboard({
         };
       case "sold":
         return {
-          title: "% Sold",
+          title: "%",
           description: "Sales pace benchmarked to expected sellthrough curve.",
-          actualLabel: "Actual % Sold",
-          expectedLabel: "Expected % Sold",
+          actualLabel: "Actual %",
+          expectedLabel: "Expected %",
           series: eventPerformance?.sellthroughTrend ?? emptyMetricTrend,
           actualStroke: "hsl(var(--success))",
           areaColor: "hsl(var(--success))",
@@ -3749,7 +4032,7 @@ function EventReportingDashboard({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-foreground/90">
-            <span className="rounded bg-secondary px-2 py-0.5 font-medium">{event.venueName}</span>
+            <span className="rounded bg-secondary px-2 py-0.5 font-medium">{abbreviateCity(event.venueName)}</span>
             <span className="rounded bg-accent px-2 py-0.5 font-medium text-accent-foreground">
               {event.eventCategory}
             </span>
@@ -3757,7 +4040,7 @@ function EventReportingDashboard({
               <span className="font-semibold">Weekday:</span> {event.weekdayLabel}
             </span>
             <span>
-              <span className="font-semibold">Start Time:</span> {startTimeLabel}
+              <span className="font-semibold">Start:</span> {startTimeLabel}
             </span>
             <span>
               <span className="font-semibold">Local Time:</span> {event.localStartTimeLabel} {getVenueTimezone(event.venueName)}
@@ -4062,27 +4345,7 @@ function EventReportingDashboard({
             </div>
           </section>
 
-          <div className="mb-6 inline-flex rounded-lg border bg-secondary/40 p-1">
-            <Button
-              variant={activeTab === "performance" ? "default" : "ghost"}
-              size="sm"
-              className="h-9 px-5"
-              onClick={() => setActiveTab("performance")}
-            >
-              Performance
-            </Button>
-            <Button
-              variant={activeTab === "pricing-details" ? "default" : "ghost"}
-              size="sm"
-              className="h-9 px-5"
-              onClick={() => setActiveTab("pricing-details")}
-            >
-              Pricing Details
-            </Button>
-          </div>
-
-          {activeTab === "performance" ? (
-            <section className="space-y-6">
+          <section className="space-y-6">
               <div className="rounded-xl border bg-background p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -4143,7 +4406,7 @@ function EventReportingDashboard({
                     { value: "revenue" as const, label: "Revenue" },
                     { value: "funnel-entries" as const, label: "Funnel Entries" },
                     { value: "funnel-completion" as const, label: "Funnel Completion" },
-                    { value: "sold" as const, label: "% Sold" },
+                    { value: "sold" as const, label: "%" },
                     { value: "roas" as const, label: "ROAS" },
                   ].map((metric) => (
                     <Button
@@ -4441,7 +4704,7 @@ function EventReportingDashboard({
                       <TableRow className="hover:bg-secondary/40">
                         <TableHead>Presale</TableHead>
                         <TableHead>Tickets Sold</TableHead>
-                        <TableHead>% Sold</TableHead>
+                        <TableHead>%</TableHead>
                         <TableHead>Comp Yield</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -4460,269 +4723,9 @@ function EventReportingDashboard({
               </div>
               </div>
             </section>
-          ) : (
-            <section className="space-y-6">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-lg border bg-secondary/20 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                    Projected Net Revenue (Current)
-                  </p>
-                  <p className="mt-1 text-xl font-semibold">
-                    {formatCurrency(eventPerformance?.projectedNetRevenueCurrent ?? 0)}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-secondary/20 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                    Projected Net Revenue (Recommended)
-                  </p>
-                  <p className="mt-1 text-xl font-semibold">
-                    {formatCurrency(eventPerformance?.projectedNetRevenueRecommended ?? 0)}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-secondary/20 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                    Pricing Opportunity
-                  </p>
-                  <p className="mt-1 text-xl font-semibold">
-                    {formatCurrency(eventPerformance?.pricingOpportunity ?? 0)}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-secondary/20 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-                    Dome ATP (Release / Current / Rec)
-                  </p>
-                  <p className="mt-1 text-xl font-semibold">
-                    {formatCurrency(event.programReleaseDomeAtp)} / {formatCurrency(event.domeAtp)} /{" "}
-                    {formatCurrency(event.recAtp)}
-                  </p>
-                </div>
-              </div>
+            <EventReportingDeepDive event={event} />
 
-              <div>
-                <h2 className="mb-2 font-heading text-3xl font-semibold">Pricing</h2>
-                <div className="rounded-xl border bg-background">
-                  <div className="flex flex-wrap items-center justify-end gap-3 border-b p-3">
-                    <Button variant="default" className="h-9" onClick={onOpenSeatmap}>
-                      Edit Seat Map Pricing
-                    </Button>
-                  </div>
-                  <div className="border-b bg-secondary/25 px-3 py-2 text-xs text-muted-foreground">
-                    Health-adjusted recommendation:
-                    <span className={cn("ml-1 font-semibold", recommendationAdjustmentPct >= 0 ? "text-success" : "text-warning")}>
-                      {recommendationAdjustmentPct >= 0 ? "+" : ""}
-                      {recommendationAdjustmentPct}% ({recommendationDirectionLabel})
-                    </span>
-                  </div>
-                  {unsavedChanges && (
-                    <div className="border-b bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
-                      {stagedActionCount} staged change{stagedActionCount === 1 ? "" : "s"} pending publish.
-                    </div>
-                  )}
 
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[760px]">
-                      <TableHeader className="bg-secondary/40">
-                        <TableRow className="hover:bg-secondary/40">
-                          <TableHead className="w-[15%]">Original</TableHead>
-                          <TableHead className="w-[15%]">Current</TableHead>
-                          <TableHead className="w-[12%]">% Sold</TableHead>
-                          <TableHead className="w-[15%]">Left-To-Go</TableHead>
-                          <TableHead className="w-[12%]">Yield</TableHead>
-                          <TableHead className="w-[31%]">Recommendation</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                      {pricingRows.map((row) => {
-                        const recommendedPrice = healthAdjustedRecommendation(
-                          row.recPrice,
-                          latestHealthScore,
-                        );
-                        const recommendationDelta = roundTo(recommendedPrice - row.currentPrice, 2);
-                        const isRecommendationDifferent = !arePriceValuesEqual(
-                          recommendedPrice,
-                          row.currentPrice,
-                        );
-                        const isRecommendationUndo =
-                          pricingRecommendationUndoById[row.id] !== undefined &&
-                          arePriceValuesEqual(recommendedPrice, row.currentPrice);
-                        const isRowStaged = savedPricingById.get(row.id) !== row.currentPrice;
-
-                        return (
-                          <TableRow key={row.id} className={cn(isRowStaged && "bg-primary/5")}>
-                            <TableCell>{formatCurrency(row.originalPrice)}</TableCell>
-                            <TableCell>
-                              {editingPricingRowId === row.id ? (
-                                <Input
-                                  type="number"
-                                  inputMode="decimal"
-                                  min="0"
-                                  step="0.01"
-                                  autoFocus
-                                  value={editingPricingValue}
-                                  onChange={(event) => setEditingPricingValue(event.target.value)}
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                      commitPricingRowEdit();
-                                    }
-                                    if (event.key === "Escape") {
-                                      cancelPricingRowEdit();
-                                    }
-                                  }}
-                                  onBlur={cancelPricingRowEdit}
-                                  className="h-8 w-[104px] bg-card"
-                                  aria-label={`Current price for ${row.label}`}
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  onDoubleClick={() => beginPricingRowEdit(row)}
-                                  className={cn(
-                                    "rounded px-1 text-left font-medium",
-                                    isRowStaged ? "text-orange-500" : "text-foreground",
-                                  )}
-                                  aria-label={`Edit current price for ${row.label}`}
-                                >
-                                  {formatCurrency(row.currentPrice)}
-                                </button>
-                              )}
-                            </TableCell>
-                            <TableCell><SellThroughBar pct={row.soldPct} /></TableCell>
-                            <TableCell>{row.ticketsLeft !== null ? row.ticketsLeft : "--"}</TableCell>
-                            <TableCell>{row.yield !== null ? formatDollarInteger(row.yield) : "--"}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="text-sm">
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      isRecommendationUndo
-                                        ? undoPricingRecommendation(row.id)
-                                        : applyPricingRecommendation(
-                                            row.id,
-                                            row.currentPrice,
-                                            recommendedPrice,
-                                          )
-                                    }
-                                    disabled={!isRecommendationDifferent && !isRecommendationUndo}
-                                    className={cn(
-                                      "inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-semibold transition",
-                                      isRecommendationUndo
-                                        ? "border-warning/50 bg-warning/10 text-warning hover:bg-warning/15"
-                                        : isRecommendationDifferent
-                                          ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
-                                          : "cursor-default border-border/70 bg-secondary/20 text-muted-foreground",
-                                    )}
-                                    aria-label={
-                                      isRecommendationUndo
-                                        ? `Undo recommended price for ${row.label}`
-                                        : `Apply recommended price for ${row.label}`
-                                    }
-                                  >
-                                    {isRecommendationUndo ? "Undo" : formatCurrency(recommendedPrice)}
-                                  </button>
-                                  <p
-                                    className={cn(
-                                      "text-xs",
-                                      recommendationDelta > 0
-                                        ? "text-success"
-                                        : recommendationDelta < 0
-                                          ? "text-warning"
-                                          : "text-muted-foreground",
-                                    )}
-                                  >
-                                    {recommendationDelta >= 0 ? "+" : ""}
-                                    {formatCurrency(recommendationDelta)}
-                                  </p>
-                                </div>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                </div>
-              </div>
-
-              <div>
-                <h2 className="mb-2 font-heading text-3xl font-semibold">Offers</h2>
-                <div className="rounded-xl border bg-background">
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[760px]">
-                      <TableHeader className="bg-secondary/40">
-                        <TableRow className="hover:bg-secondary/40">
-                          <TableHead>Offer</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Start</TableHead>
-                          <TableHead>End</TableHead>
-                          <TableHead className="text-center">Publish</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {offerRows.map((offer) => (
-                          <TableRow key={offer.id}>
-                            <TableCell>{offer.offer}</TableCell>
-                            <TableCell>{offer.type}</TableCell>
-                            <TableCell>{offer.amountLabel}</TableCell>
-                            <TableCell>{offer.startLabel}</TableCell>
-                            <TableCell>{offer.endLabel}</TableCell>
-                            <TableCell className="text-center">
-                              <button
-                                type="button"
-                                onClick={() => toggleOfferPublished(offer.id)}
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-transparent transition hover:border-border"
-                                aria-label={`Toggle ${offer.offer} publish`}
-                              >
-                                <span
-                                  className={cn(
-                                    "h-3.5 w-3.5 rounded-full",
-                                    offer.published ? "bg-success" : "bg-muted-foreground/40",
-                                  )}
-                                />
-                              </button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h2 className="mb-2 font-heading text-3xl font-semibold">Active Discounts</h2>
-                <div className="rounded-xl border bg-background">
-                  <div className="overflow-x-auto">
-                    <Table className="min-w-[700px]">
-                      <TableHeader className="bg-secondary/40">
-                        <TableRow className="hover:bg-secondary/40">
-                          <TableHead>Discount</TableHead>
-                          <TableHead>Code</TableHead>
-                          <TableHead>Amount</TableHead>
-                          <TableHead>Start</TableHead>
-                          <TableHead>End</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {discountRows.map((discount) => (
-                          <TableRow key={discount.id}>
-                            <TableCell>{discount.discount}</TableCell>
-                            <TableCell>{discount.code}</TableCell>
-                            <TableCell>{discount.amountLabel}</TableCell>
-                            <TableCell>{discount.startLabel}</TableCell>
-                            <TableCell>{discount.endLabel}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
         </div>
       </main>
       <DraftActionFooter
@@ -4738,6 +4741,9 @@ function EventReportingDashboard({
   );
 }
 
+// Generated once at module load — stable across renders, no re-computation.
+const generatedPortfolioEvents = generatePortfolioEvents();
+
 export default function App() {
   const [publishedEvents, setPublishedEvents] = useState<EventRecord[]>(() => cloneEvents(initialEvents));
   const [draftEvents, setDraftEvents] = useState<EventRecord[]>(() => cloneEvents(initialEvents));
@@ -4747,6 +4753,13 @@ export default function App() {
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [daypartFilter, setDaypartFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [weekdayFilter, setWeekdayFilter] = useState<string[]>([]);
+  const [priceTierFilter, setPriceTierFilter] = useState<string[]>([]);
+  const [eventPriceTiers, setEventPriceTiers] = useState<Record<string, string>>(() => {
+    const tiers = ["S11", "S12", "S13", "S14"];
+    return Object.fromEntries(initialEvents.map((e, i) => [e.id, tiers[i % 4]]));
+  });
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set(["evt-001"]));
   const [sortState, setSortState] = useState<{ key: SortKey; direction: "asc" | "desc" }>({
     key: "startTime",
@@ -4784,6 +4797,7 @@ export default function App() {
   const [showRecommendedReviewModal, setShowRecommendedReviewModal] = useState(false);
   const [recommendedReviewValuesById, setRecommendedReviewValuesById] = useState<Record<string, string>>({});
   const [draftSeatRecommendationUndoById, setDraftSeatRecommendationUndoById] = useState<Record<string, number>>({});
+  const [priceChangeWarning, setPriceChangeWarning] = useState<{ title?: string; message: string; onConfirm: () => void } | null>(null);
   const [route, setRoute] = useState<ViewRoute>(() => {
     if (typeof window === "undefined") {
       return { type: "price-adjustment" };
@@ -4819,6 +4833,8 @@ export default function App() {
       setActiveBulkEditEventId(null);
     }
   }, [activeBulkEditEventId, selectedSeatGroupsByEvent]);
+
+  const [primaryTab, setPrimaryTab] = useState<"pricing" | "reporting">("pricing");
 
   const navigate = (path: string) => {
     window.history.pushState({}, "", path);
@@ -4869,17 +4885,13 @@ export default function App() {
               },
             ]
           : []),
-        ...(sharedEventPriceTierOptions.length > 0
-          ? [
-              {
-                value: "priceTier" as const,
-                label: "Price Tier",
-                inputType: "select" as const,
-                group: "event" as const,
-                selectOptions: sharedEventPriceTierOptions,
-              },
-            ]
-          : []),
+        {
+          value: "priceTier" as const,
+          label: "Price Tier",
+          inputType: "select" as const,
+          group: "event" as const,
+          selectOptions: PRICE_TIERS,
+        },
         ...sharedEventSeatGroupNames.map((seatGroupName) => ({
           value: `seatGroup:${seatGroupName}` as const,
           label: seatGroupName,
@@ -4892,7 +4904,6 @@ export default function App() {
       ],
     [
       canBulkEditDomeAtp,
-      sharedEventPriceTierOptions,
       sharedEventSeatGroupNames,
       selectedEvents,
     ],
@@ -4915,7 +4926,7 @@ export default function App() {
             return [
               field.value,
               summarizeBulkEditValues(
-                selectedEvents.map((event) => event.priceTier),
+                selectedEvents.map((event) => eventPriceTiers[event.id] ?? "S11"),
                 (value) => value,
               ),
             ];
@@ -4943,7 +4954,7 @@ export default function App() {
           ];
         }),
       ),
-    [selectedEvents, sharedEventEditableFields],
+    [selectedEvents, sharedEventEditableFields, eventPriceTiers],
   );
   const bulkEventEditValues = useMemo(
     () =>
@@ -4959,6 +4970,7 @@ export default function App() {
       ) as Record<string, NumericBulkEditMode>,
     [bulkEventEditModesByField, sharedEventEditableFields],
   );
+
 
   const filteredAndSortedEvents = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -5007,6 +5019,15 @@ export default function App() {
         if (daypartFilter === "evening" && hour < 17) return false;
       }
 
+      // Category filter
+      if (categoryFilter !== "all" && event.eventCategory !== categoryFilter) return false;
+
+      // Weekday filter
+      if (weekdayFilter.length > 0 && !weekdayFilter.includes(event.weekdayLabel)) return false;
+
+      // Price tier filter
+      if (priceTierFilter.length > 0 && !priceTierFilter.includes(eventPriceTiers[event.id] ?? "")) return false;
+
       return true;
     });
 
@@ -5035,7 +5056,7 @@ export default function App() {
     });
 
     return sorted;
-  }, [draftEvents, searchTerm, statusFilter, locationFilter, dateFrom, dateTo, daypartFilter, sortState]);
+  }, [draftEvents, searchTerm, statusFilter, locationFilter, dateFrom, dateTo, daypartFilter, categoryFilter, weekdayFilter, priceTierFilter, eventPriceTiers, sortState]);
   const recommendedReviewChangeRows = useMemo<RecommendedReviewChangeRow[]>(
     () =>
       draftEvents.flatMap((event) =>
@@ -5098,6 +5119,9 @@ export default function App() {
     dateFrom !== "",
     dateTo !== "",
     daypartFilter !== "all",
+    categoryFilter !== "all",
+    weekdayFilter.length > 0,
+    priceTierFilter.length > 0,
   ].filter(Boolean).length;
 
   function clearAllFilters() {
@@ -5105,6 +5129,9 @@ export default function App() {
     setDateFrom("");
     setDateTo("");
     setDaypartFilter("all");
+    setCategoryFilter("all");
+    setWeekdayFilter([]);
+    setPriceTierFilter([]);
   }
 
   const applyAllRecommendations = useCallback(() => {
@@ -5221,16 +5248,31 @@ export default function App() {
 
     if (editingSeatCell.field === "name") {
       onSeatGroupNameChange(editingSeatCell.eventId, editingSeatCell.seatGroupId, editingSeatValue);
+      setEditingSeatCell(null);
+      setEditingSeatValue("");
     } else {
-      onSeatGroupCurrentPriceChange(
-        editingSeatCell.eventId,
-        editingSeatCell.seatGroupId,
-        editingSeatValue,
-      );
+      const parsedNew = Number.parseFloat(editingSeatValue);
+      const event = draftEvents.find((e) => e.id === editingSeatCell.eventId);
+      const seatGroup = event?.seatGroups.find((sg) => sg.id === editingSeatCell.seatGroupId);
+      const originalPrice = seatGroup?.originalPrice ?? null;
+      const applyEdit = () => {
+        onSeatGroupCurrentPriceChange(editingSeatCell.eventId, editingSeatCell.seatGroupId, editingSeatValue);
+        setEditingSeatCell(null);
+        setEditingSeatValue("");
+      };
+      if (originalPrice !== null && Number.isFinite(parsedNew) && originalPrice > 0) {
+        const changePct = Math.abs((parsedNew - originalPrice) / originalPrice) * 100;
+        if (changePct > 50) {
+          const direction = parsedNew > originalPrice ? "above" : "below";
+          setPriceChangeWarning({
+            message: `New price $${parsedNew.toFixed(2)} is ${Math.round(changePct)}% ${direction} the original price of $${originalPrice.toFixed(2)}. Continue?`,
+            onConfirm: applyEdit,
+          });
+          return;
+        }
+      }
+      applyEdit();
     }
-
-    setEditingSeatCell(null);
-    setEditingSeatValue("");
   };
 
   const onDomeAtpChange = (eventId: string, nextValue: string) => {
@@ -5255,6 +5297,7 @@ export default function App() {
         return {
           ...event,
           domeAtp: roundTo(Math.max(0, parsedValue), 2),
+          lastPriceChangedAt: new Date().toISOString(),
         };
       }),
     );
@@ -5321,20 +5364,15 @@ export default function App() {
 
     if (field === "priceTier") {
       const trimmedValue = nextValue.trim();
-      if (trimmedValue.length === 0) {
+      if (trimmedValue.length === 0 || !PRICE_TIERS.includes(trimmedValue)) {
         return;
       }
 
-      setDraftEvents((current) =>
-        current.map((event) =>
-          selectedIds.has(event.id) && event.priceTierOptions.includes(trimmedValue)
-            ? {
-                ...event,
-                priceTier: trimmedValue,
-              }
-            : event,
-        ),
-      );
+      setEventPriceTiers((prev) => {
+        const next = { ...prev };
+        eventIds.forEach((id) => { next[id] = trimmedValue; });
+        return next;
+      });
       return;
     }
 
@@ -5468,6 +5506,7 @@ export default function App() {
             ? {
                 ...group,
                 currentPrice: roundTo(Math.max(0, parsedValue), 2),
+                lastPriceChangedAt: new Date().toISOString(),
               }
             : group,
         );
@@ -5622,6 +5661,7 @@ export default function App() {
                       currentPrice:
                         applyNumericBulkEdit(group.currentPrice, nextValue, editMode) ??
                         group.currentPrice,
+                      lastPriceChangedAt: new Date().toISOString(),
                     }),
               }
             : group,
@@ -5694,18 +5734,39 @@ export default function App() {
     if (selectedSeatGroupIds.length === 0) return;
     const eventValues = bulkSeatModalValues[eventId] ?? {};
     const eventModes = bulkSeatModalModes[eventId] ?? {};
-    if (eventValues.name?.trim()) {
-      cancelSeatPriceEdit();
-      setDraftSeatRecommendationUndoById({});
-      onSeatGroupBulkEdit(eventId, selectedSeatGroupIds, "name", eventValues.name, "set");
-    }
+    const doApply = () => {
+      if (eventValues.name?.trim()) {
+        cancelSeatPriceEdit();
+        setDraftSeatRecommendationUndoById({});
+        onSeatGroupBulkEdit(eventId, selectedSeatGroupIds, "name", eventValues.name, "set");
+      }
+      if (eventValues.currentPrice?.trim()) {
+        cancelSeatPriceEdit();
+        setDraftSeatRecommendationUndoById({});
+        onSeatGroupBulkEdit(eventId, selectedSeatGroupIds, "currentPrice", eventValues.currentPrice, eventModes.currentPrice ?? "set");
+      }
+      setBulkSeatModalValues((c) => ({ ...c, [eventId]: {} }));
+      setActiveBulkEditEventId(null);
+    };
     if (eventValues.currentPrice?.trim()) {
-      cancelSeatPriceEdit();
-      setDraftSeatRecommendationUndoById({});
-      onSeatGroupBulkEdit(eventId, selectedSeatGroupIds, "currentPrice", eventValues.currentPrice, eventModes.currentPrice ?? "set");
+      const parsedNew = Number.parseFloat(eventValues.currentPrice);
+      const event = draftEvents.find((e) => e.id === eventId);
+      const mode = eventModes.currentPrice ?? "set";
+      if (mode === "set" && Number.isFinite(parsedNew) && event) {
+        const exceedingGroups = event.seatGroups
+          .filter((sg) => selectedSeatGroupIds.includes(sg.id) && sg.originalPrice > 0)
+          .filter((sg) => Math.abs((parsedNew - sg.originalPrice) / sg.originalPrice) * 100 > 50);
+        if (exceedingGroups.length > 0) {
+          const maxPct = Math.max(...exceedingGroups.map((sg) => Math.abs((parsedNew - sg.originalPrice) / sg.originalPrice) * 100));
+          setPriceChangeWarning({
+            message: `The new price exceeds ±50% of the original price for ${exceedingGroups.length} seat group${exceedingGroups.length === 1 ? "" : "s"} (up to ${Math.round(maxPct)}% change). Continue?`,
+            onConfirm: doApply,
+          });
+          return;
+        }
+      }
     }
-    setBulkSeatModalValues((c) => ({ ...c, [eventId]: {} }));
-    setActiveBulkEditEventId(null);
+    doApply();
   };
 
   const openRecommendedReviewModal = () => {
@@ -5923,6 +5984,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(9,119,180,0.12),_transparent_42%),linear-gradient(180deg,_hsl(210_33%_98%)_0%,_hsl(210_30%_95%)_100%)] px-4 py-8 pb-28 sm:px-6 lg:px-8">
         <main className="mx-auto max-w-[1450px]">
+          <PriceChangeWarningModal warning={priceChangeWarning} onDismiss={() => setPriceChangeWarning(null)} />
           <PublishedOverlay visible={showPublishOverlay} />
           <PublishConfirmationModal
             open={showPublishConfirmation}
@@ -5947,10 +6009,10 @@ export default function App() {
                 className="mb-2 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                Back to Pricing Tool
+                Back to Revenue Management Tool
               </button>
               <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
-                Pricing Tool
+                Revenue Management Tool
               </h1>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Scaled-back view of event pricing and ticket sales.
@@ -6057,6 +6119,39 @@ export default function App() {
                 </select>
               </div>
 
+              <div className="h-4 w-px bg-border/60" />
+
+              {/* Category */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Category</span>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="all">All</option>
+                  <option value="Sports">Sports</option>
+                  <option value="Film">Film</option>
+                  <option value="Film + Live Score">Film + Live Score</option>
+                </select>
+              </div>
+
+              <div className="h-4 w-px bg-border/60" />
+
+              {/* Weekday */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Weekday</span>
+                <WeekdayFilterDropdown selected={weekdayFilter} onChange={setWeekdayFilter} />
+              </div>
+
+              <div className="h-4 w-px bg-border/60" />
+
+              {/* Price Tier */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Price Tier</span>
+                <PriceTierFilterDropdown selected={priceTierFilter} onChange={setPriceTierFilter} />
+              </div>
+
               {/* Clear button */}
               {activeFilterCount > 0 && (
                 <>
@@ -6157,25 +6252,28 @@ export default function App() {
                   <col style={{ width: "170px" }} />
                   <col style={{ width: "180px" }} />
                   <col style={{ width: "150px" }} />
+                  <col style={{ width: "130px" }} />
                   <col style={{ width: "210px" }} />
                   <col style={{ width: "100px" }} />
+                  <col style={{ width: "100px" }} />
+                  <col style={{ width: "140px" }} />
                   <col style={{ width: "110px" }} />
                   <col style={{ width: "90px" }} />
-                  <col style={{ width: "100px" }} />
+                  <col style={{ width: "140px" }} />
                   <col style={{ width: "110px" }} />
                   <col style={{ width: "90px" }} />
-                  <col style={{ width: "100px" }} />
+                  <col style={{ width: "140px" }} />
                   <col style={{ width: "110px" }} />
                   <col style={{ width: "90px" }} />
                 </colgroup>
                 <TableHeader className="bg-card sticky top-0 z-10 shadow-[0_1px_3px_0_rgba(0,0,0,0.06)]">
                   <TableRow className="bg-card hover:bg-card">
-                    <TableHead colSpan={4} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
+                    <TableHead colSpan={5} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
                       <div className="flex h-full items-center justify-center">
                         <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Event Details</span>
                       </div>
                     </TableHead>
-                    <TableHead className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
+                    <TableHead colSpan={3} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
                       <div className="flex h-full items-center justify-center">
                         <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Pricing</span>
                       </div>
@@ -6223,16 +6321,19 @@ export default function App() {
                     </TableHead>
                     <TableHead className="w-[110px] whitespace-nowrap">Days / Window</TableHead>
                     <TableHead className="w-[150px] whitespace-nowrap text-center">Tickets Sold</TableHead>
+                    <TableHead className="w-[130px] whitespace-nowrap text-muted-foreground/70">Last Change</TableHead>
                     <TableHead className="w-[210px] whitespace-nowrap text-center border-r border-border/40">Price Range</TableHead>
-                    <TableHead className="w-[100px] whitespace-nowrap text-center border-l border-border/70">Sold</TableHead>
-                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
-                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
-                    <TableHead className="w-[100px] whitespace-nowrap text-center">Sold</TableHead>
-                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
-                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
-                    <TableHead className="w-[100px] whitespace-nowrap text-center">Sold</TableHead>
-                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
-                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
+                    <TableHead className="w-[100px] whitespace-nowrap text-center border-l border-border/70">Dome ATP</TableHead>
+                    <TableHead className="w-[100px] whitespace-nowrap text-center">Price Tier</TableHead>
+                    <TableHead className="w-[140px] whitespace-nowrap text-center border-l border-border/70">Sold / Avail.</TableHead>
+                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj.</TableHead>
+                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
+                    <TableHead className="w-[140px] whitespace-nowrap text-center">Sold / Avail.</TableHead>
+                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj.</TableHead>
+                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
+                    <TableHead className="w-[140px] whitespace-nowrap text-center">Sold / Avail.</TableHead>
+                    <TableHead className="w-[110px] whitespace-nowrap text-center">Proj.</TableHead>
+                    <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -6250,8 +6351,12 @@ export default function App() {
                     const isBulkEditOverlayOpen = activeBulkEditEventId === event.id;
                     const domePriceRange = formatSeatGroupPriceRange(event, "currentPrice");
                     const hasSoldData = event.domeSold !== null || event.hallSold !== null || event.gaSold !== null;
+                    const dummyPriceTier = eventPriceTiers[event.id] ?? "S11";
                     const totalSold = (event.domeSold ?? 0) + (event.hallSold ?? 0) + (event.gaSold ?? 0);
                     const gaSoldPct = getSeatGroupByName(event, "GA")?.soldPct ?? null;
+                    const domeAvail = event.domeSold !== null && event.soldPct !== null && event.soldPct > 0 ? Math.round(event.domeSold * 100 / event.soldPct) : null;
+                    const hallAvail = event.hallSold !== null && event.hallSoldPct !== null && event.hallSoldPct > 0 ? Math.round(event.hallSold * 100 / event.hallSoldPct) : null;
+                    const gaAvail = event.gaSold !== null && gaSoldPct !== null && gaSoldPct > 0 ? Math.round(event.gaSold * 100 / gaSoldPct) : null;
 
                     return (
                       <Fragment key={event.id}>
@@ -6285,7 +6390,7 @@ export default function App() {
                               <div className="min-w-0">
                                 <p className="max-w-[540px] whitespace-normal text-xs leading-tight">{event.event}</p>
                                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                                  <p className="text-xs text-muted-foreground">{event.venueName}</p>
+                                  <p className="text-xs text-muted-foreground">{abbreviateCity(event.venueName)}</p>
                                   {isPendingPublish && (
                                     <Badge variant="secondary" className="bg-primary/12 text-primary">Pending Publish</Badge>
                                   )}
@@ -6307,30 +6412,48 @@ export default function App() {
                           <TableCell className="text-center font-medium">
                             {hasSoldData ? formatWholeNumber(totalSold) : "--"}
                           </TableCell>
+                          <TableCell className="text-[11px] text-muted-foreground/80">
+                            {formatLastChange(event.lastPriceChangedAt)}
+                          </TableCell>
                           <TableCell className="whitespace-nowrap border-x border-border/40 text-center">
                             {domePriceRange}
                           </TableCell>
-                          <TableCell className="text-center border-l border-border/40">
-                            {event.domeSold !== null ? formatWholeNumber(event.domeSold) : "--"}
+                          <TableCell className="text-center">{event.domeAtp !== null ? formatCurrency(event.domeAtp) : "—"}</TableCell>
+                          <TableCell className="text-center">
+                            <select
+                              value={dummyPriceTier}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                const next = e.target.value;
+                                setPriceChangeWarning({
+                                  title: "Confirm Price Tier Change",
+                                  message: `Change price tier for "${event.event}" from ${dummyPriceTier} to ${next}?`,
+                                  onConfirm: () => setEventPriceTiers((prev) => ({ ...prev, [event.id]: next })),
+                                });
+                              }}
+                              className="h-6 rounded border border-border/50 bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:border-border transition-colors"
+                            >
+                              {PRICE_TIERS.map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
                           </TableCell>
+                          <SoldAvailCell sold={event.domeSold} avail={domeAvail} event={event} className="border-l border-border/40" />
                           <TableCell className="text-center">
                             {event.domeSoldProjected !== null ? formatWholeNumber(event.domeSoldProjected) : "--"}
                           </TableCell>
                           <TableCell className="text-center border-r border-border/40">
                             <SellThroughBar pct={event.soldPct} />
                           </TableCell>
-                          <TableCell className="text-center">
-                            {event.hallSold !== null ? formatWholeNumber(event.hallSold) : "--"}
-                          </TableCell>
+                          <SoldAvailCell sold={event.hallSold} avail={hallAvail} event={event} />
                           <TableCell className="text-center">
                             {event.hallSoldProjected !== null ? formatWholeNumber(event.hallSoldProjected) : "--"}
                           </TableCell>
                           <TableCell className="text-center border-r border-border/40">
                             <SellThroughBar pct={event.hallSoldPct} />
                           </TableCell>
-                          <TableCell className="text-center">
-                            {event.gaSold !== null ? formatWholeNumber(event.gaSold) : "--"}
-                          </TableCell>
+                          <SoldAvailCell sold={event.gaSold} avail={gaAvail} event={event} />
                           <TableCell className="text-center">
                             {event.gaSoldProjected !== null ? formatWholeNumber(event.gaSoldProjected) : "--"}
                           </TableCell>
@@ -6341,8 +6464,14 @@ export default function App() {
 
                         {isExpanded && (
                           <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                            <TableCell colSpan={14} className="p-0">
+                            <TableCell colSpan={17} className="p-0">
                               <div className="mx-5 my-4 max-w-[1500px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
+                                <div className="flex items-center gap-4 border-b border-border/50 px-4 py-2 bg-secondary/10">
+                                  <span className="text-[11px] text-muted-foreground">
+                                    <span className="font-medium">Event last change:</span>{" "}
+                                    <span>{formatLastChange(event.lastPriceChangedAt)}</span>
+                                  </span>
+                                </div>
                                 {hasSeatGroups ? (
                                   <>
                                     <div className="sticky top-[48px] z-[5] bg-card">
@@ -6391,8 +6520,10 @@ export default function App() {
                                             />
                                           </TableHead>
                                           <TableHead className="whitespace-nowrap">Seat Group</TableHead>
+                                          <TableHead className="whitespace-nowrap text-muted-foreground/70">Last Change</TableHead>
                                           <TableHead className="whitespace-nowrap text-center">Ticket Price</TableHead>
                                           <TableHead className="whitespace-nowrap text-center">Tickets Sold</TableHead>
+                                          <TableHead className="whitespace-nowrap text-center">%</TableHead>
                                         </TableRow>
                                       </TableHeader>
                                       <TableBody>
@@ -6438,6 +6569,7 @@ export default function App() {
                                                   </button>
                                                 )}
                                               </TableCell>
+                                              <TableCell className="text-muted-foreground/70 text-[11px]">{formatLastChange(seatGroup.lastPriceChangedAt)}</TableCell>
                                               <TableCell className="text-center">
                                                 {editingSeatCell?.eventId === event.id && editingSeatCell.seatGroupId === seatGroup.id && editingSeatCell.field === "currentPrice" ? (
                                                   <Input
@@ -6465,6 +6597,9 @@ export default function App() {
                                               </TableCell>
                                               <TableCell className="text-center">
                                                 {sgSold !== null ? formatWholeNumber(sgSold) : "--"}
+                                              </TableCell>
+                                              <TableCell className="text-center">
+                                                <SellThroughBar pct={seatGroup.soldPct} />
                                               </TableCell>
                                             </TableRow>
                                           );
@@ -6548,6 +6683,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(9,119,180,0.12),_transparent_42%),linear-gradient(180deg,_hsl(210_33%_98%)_0%,_hsl(210_30%_95%)_100%)] px-4 py-8 pb-28 sm:px-6 lg:px-8">
       <main className="mx-auto max-w-[1450px]">
+        <PriceChangeWarningModal warning={priceChangeWarning} onDismiss={() => setPriceChangeWarning(null)} />
         <PublishedOverlay visible={showPublishOverlay} />
         <PublishConfirmationModal
           open={showPublishConfirmation}
@@ -6567,22 +6703,57 @@ export default function App() {
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
-              Pricing Tool
+              Revenue Management Tool
             </h1>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Search, filter, and stage pricing updates across active events before publishing.
+              {primaryTab === "pricing"
+                ? "Search, filter, and stage pricing updates across active events before publishing."
+                : "Analyze event performance across your portfolio with real-time filters."}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate("/mvp")}
-            className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-card px-3.5 py-2 text-sm font-medium text-muted-foreground shadow-sm hover:text-foreground hover:bg-muted/40 transition-colors"
-          >
-            MVP
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Primary tab switcher */}
+            <div className="inline-flex rounded-lg border border-border/60 bg-card p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setPrimaryTab("pricing")}
+                className={cn(
+                  "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                  primaryTab === "pricing"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Pricing
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrimaryTab("reporting")}
+                className={cn(
+                  "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                  primaryTab === "reporting"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Reporting
+              </button>
+            </div>
+          </div>
         </header>
 
-        <section className="overflow-hidden rounded-2xl border bg-card/95 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)] backdrop-blur">
+        {primaryTab === "reporting" && (
+          <PortfolioReportingPage
+            events={[...draftEvents, ...generatedPortfolioEvents]}
+            onViewEvent={(id) => {
+              if (draftEvents.some((e) => e.id === id)) {
+                navigate(`/reporting/${encodeURIComponent(id)}`);
+              }
+            }}
+          />
+        )}
+
+        <section className={cn("overflow-hidden rounded-2xl border bg-card/95 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)] backdrop-blur", primaryTab === "reporting" && "hidden")}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-2.5 sm:px-6">
             {/* Filter tabs — shadcn Tabs style */}
             <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
@@ -6683,6 +6854,39 @@ export default function App() {
                 <option value="afternoon">Afternoon</option>
                 <option value="evening">Evening</option>
               </select>
+            </div>
+
+            <div className="h-4 w-px bg-border/60" />
+
+            {/* Category */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Category</span>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="h-7 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">All</option>
+                <option value="Sports">Sports</option>
+                <option value="Film">Film</option>
+                <option value="Film + Live Score">Film + Live Score</option>
+              </select>
+            </div>
+
+            <div className="h-4 w-px bg-border/60" />
+
+            {/* Weekday */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Weekday</span>
+              <WeekdayFilterDropdown selected={weekdayFilter} onChange={setWeekdayFilter} />
+            </div>
+
+            <div className="h-4 w-px bg-border/60" />
+
+            {/* Price Tier */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Price Tier</span>
+              <PriceTierFilterDropdown selected={priceTierFilter} onChange={setPriceTierFilter} />
             </div>
 
             {/* Clear button */}
@@ -6800,69 +7004,66 @@ export default function App() {
           <div className="overflow-auto max-h-[calc(100vh-280px)]">
             <Table className="table-fixed" wrapperClassName="overflow-visible">
               <colgroup>
-                <col style={{width: '420px'}} />
+                <col style={{width: '340px'}} />
+                <col style={{width: '80px'}} />
+                <col style={{width: '80px'}} />
                 <col style={{width: '130px'}} />
-                <col style={{width: '170px'}} />
-                <col style={{width: '160px'}} />
-                <col style={{width: '105px'}} />
-                <col style={{width: '180px'}} />
-                <col style={{width: '120px'}} />
-                <col style={{width: '120px'}} />
-                <col style={{width: '100px'}} />
                 <col style={{width: '110px'}} />
                 <col style={{width: '90px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '110px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '110px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '160px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '130px'}} />
                 <col style={{width: '140px'}} />
+                <col style={{width: '105px'}} />
+                <col style={{width: '80px'}} />
+                <col style={{width: '65px'}} />
+                <col style={{width: '80px'}} />
+                <col style={{width: '105px'}} />
+                <col style={{width: '80px'}} />
+                <col style={{width: '65px'}} />
+                <col style={{width: '80px'}} />
+                <col style={{width: '105px'}} />
+                <col style={{width: '80px'}} />
+                <col style={{width: '65px'}} />
                 <col style={{width: '110px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '120px'}} />
+                <col style={{width: '100px'}} />
+                <col style={{width: '90px'}} />
+                <col style={{width: '90px'}} />
                 <col style={{width: '70px'}} />
+                <col style={{width: '100px'}} />
+                <col style={{width: '80px'}} />
+                <col style={{width: '50px'}} />
               </colgroup>
               <TableHeader className="bg-card sticky top-0 z-10 shadow-[0_1px_3px_0_rgba(0,0,0,0.06)]">
                 <TableRow className="bg-card hover:bg-card">
                   <TableHead
-                    colSpan={5}
-                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
-                  >
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Event Details</span>
-                    </div>
-                  </TableHead>
+                    colSpan={3}
+                    className="h-5 border-r border-b border-border/60 bg-secondary/20 p-0 sticky left-0 z-30"
+                  />
                   <TableHead
                     colSpan={3}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Pricing</span>
+                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Schedule</span>
                     </div>
                   </TableHead>
                   <TableHead
-                    colSpan={3}
-                    className="w-[330px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    colSpan={4}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Dome</span>
                     </div>
                   </TableHead>
                   <TableHead
-                    colSpan={3}
-                    className="w-[330px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    colSpan={4}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Hall</span>
                     </div>
                   </TableHead>
                   <TableHead
-                    colSpan={3}
-                    className="w-[330px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    colSpan={4}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">GA</span>
@@ -6870,21 +7071,21 @@ export default function App() {
                   </TableHead>
                   <TableHead
                     colSpan={3}
-                    className="w-[510px] h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Revenue</span>
                     </div>
                   </TableHead>
-                  <TableHead colSpan={5} className="w-[780px] h-5 border-b border-border/60 bg-secondary/20 p-0 text-center">
+                  <TableHead colSpan={5} className="h-5 border-b border-border/60 bg-secondary/20 p-0 text-center">
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Funnel Performance</span>
                     </div>
                   </TableHead>
                 </TableRow>
                 <TableRow className="hover:bg-card bg-card">
-                  <TableHead className="w-[420px] whitespace-nowrap">
-                    <div className="flex items-center gap-3">
+                  <TableHead className="w-[340px] whitespace-nowrap sticky left-0 z-30 bg-card">
+                    <div className="flex items-center gap-2">
                       <Checkbox
                         checked={visibleEventIds.length > 0 && selectedVisibleEventCount === visibleEventIds.length}
                         indeterminate={
@@ -6897,57 +7098,56 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => onSort("event")}
-                        className="group flex items-center gap-1.5 whitespace-nowrap"
+                        className="group flex items-center gap-1 whitespace-nowrap"
                       >
                         {sortLabelMap.event}
                         {sortIconForKey("event")}
                       </button>
                     </div>
                   </TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap text-center">
+                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[340px] z-30 bg-card">
                     Health
                   </TableHead>
-                  <TableHead className="w-[170px] whitespace-nowrap">
+                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[420px] z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]">Tier</TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap border-l border-border/70">
                     <button
                       type="button"
                       onClick={() => onSort("startTime")}
-                      className="group flex items-center gap-1.5 whitespace-nowrap"
+                      className="group flex items-center gap-1 whitespace-nowrap"
                     >
                       {sortLabelMap.startTime}
                       {sortIconForKey("startTime")}
                     </button>
                   </TableHead>
-                  <TableHead className="w-[160px] whitespace-nowrap">
+                  <TableHead className="w-[110px] whitespace-nowrap">
                     Days / Window
                   </TableHead>
-                  <TableHead className="w-[105px] whitespace-nowrap">% Cycle</TableHead>
-                  <TableHead className="w-[180px] whitespace-nowrap border-l border-border/70 text-center">
-                    Dome
+                  <TableHead className="w-[90px] whitespace-nowrap text-muted-foreground/70">Last Change</TableHead>
+                  <TableHead className="w-[140px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
+                  <TableHead className="w-[105px] whitespace-nowrap text-center">Sold / Avail.</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap text-center">Proj.</TableHead>
+                  <TableHead className="w-[65px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
+                  <TableHead className="w-[105px] whitespace-nowrap text-center">Sold / Avail.</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap text-center">Proj.</TableHead>
+                  <TableHead className="w-[65px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
+                  <TableHead className="w-[105px] whitespace-nowrap text-center">Sold / Avail.</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap text-center">Proj.</TableHead>
+                  <TableHead className="w-[65px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">
+                    Net Rev
                   </TableHead>
-                  <TableHead className="w-[120px] whitespace-nowrap text-center">Hall</TableHead>
-                  <TableHead className="w-[120px] whitespace-nowrap border-r border-border/70 text-center">GA</TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap text-center border-l border-border/70">Sold</TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap text-center">Sold</TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap text-center">Sold</TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap text-center">Proj. Sold</TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap text-center border-r border-border/70">% Sold</TableHead>
-                  <TableHead className="w-[160px] whitespace-nowrap border-l border-border/70 text-center px-5">
-                    Net Ticket Rev
+                  <TableHead className="w-[100px] whitespace-nowrap text-center">
+                    Proj. Rev
                   </TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap text-center px-5">
-                    Proj. Net Rev
-                  </TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap border-r border-border/70 text-center px-5">
+                  <TableHead className="w-[90px] whitespace-nowrap border-r border-border/70 text-center">
                     Opt. Proj
                   </TableHead>
-                  <TableHead className="w-[140px] whitespace-nowrap">TOF</TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap">FCR</TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap">FCR vs. Exp.</TableHead>
-                  <TableHead className="w-[120px] whitespace-nowrap">
+                  <TableHead className="w-[90px] whitespace-nowrap">TOF</TableHead>
+                  <TableHead className="w-[70px] whitespace-nowrap">FCR</TableHead>
+                  <TableHead className="w-[100px] whitespace-nowrap">FCR vs. Exp.</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap">
                     <button
                       type="button"
                       onClick={() => onSort("status")}
@@ -6975,6 +7175,7 @@ export default function App() {
                   const bulkSeatEditField = bulkSeatEditFieldByEvent[event.id] ?? "currentPrice";
                   const bulkSeatEditMode = bulkSeatEditModeByEvent[event.id] ?? "set";
                   const isBulkEditOverlayOpen = activeBulkEditEventId === event.id;
+                  const dummyPriceTier = eventPriceTiers[event.id] ?? "S11";
                   const domePriceRange = formatSeatGroupPriceRange(event, "currentPrice");
                   const domeSellthroughLift = getSellthroughLift(
                     event.soldPct,
@@ -6986,6 +7187,9 @@ export default function App() {
                     0.85,
                   );
                   const gaSoldPct = getSeatGroupByName(event, "GA")?.soldPct ?? null;
+                  const domeAvail = event.domeSold !== null && event.soldPct !== null && event.soldPct > 0 ? Math.round(event.domeSold * 100 / event.soldPct) : null;
+                  const hallAvail = event.hallSold !== null && event.hallSoldPct !== null && event.hallSoldPct > 0 ? Math.round(event.hallSold * 100 / event.hallSoldPct) : null;
+                  const gaAvail = event.gaSold !== null && gaSoldPct !== null && gaSoldPct > 0 ? Math.round(event.gaSold * 100 / gaSoldPct) : null;
                   const gaProjectedSellthrough = projectSellthroughMetric(
                     gaSoldPct,
                     domeSellthroughLift,
@@ -6993,17 +7197,26 @@ export default function App() {
                   );
                   const netTicketRevenueBreakdown = getNetTicketRevenueBreakdown(event);
 
+                  // Pre-blend transparent attention colors onto card (white) to get an opaque
+                  // background — required so sticky cells fully cover horizontally scrolled content.
+                  // bg-warning/5 on white ≈ rgb(254,247,243); bg-primary/0.03 on white ≈ rgb(250,250,253)
+                  // bg-muted/35 on white ≈ rgb(248,249,250)
+                  const stickyBg = cn(
+                    "bg-card group-hover/row:bg-[rgb(248,249,250)]",
+                    event.attention === "underperforming" && !isExpanded && "!bg-[rgb(254,247,243)]",
+                    isExpanded && "!bg-[rgb(250,250,253)]",
+                  );
                   return (
                     <Fragment key={event.id}>
                       <TableRow
                         onClick={() => toggleExpanded(event.id)}
                         className={cn(
-                          "cursor-pointer hover:bg-muted/35",
+                          "group/row cursor-pointer hover:bg-muted/35",
                           event.attention === "underperforming" && !isExpanded && "bg-warning/5",
                           isExpanded && "bg-primary/[0.03] border-l-2 border-l-primary",
                         )}
                       >
-                        <TableCell>
+                        <TableCell className={cn("sticky left-0 z-[1]", stickyBg)}>
                           <div className="flex items-start gap-3">
                             <button
                               type="button"
@@ -7033,8 +7246,7 @@ export default function App() {
                                 {event.event}
                               </p>
                               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                                <p className="text-xs text-muted-foreground">{event.venueName}</p>
-                                {attentionBadge(event)}
+                                <p className="text-xs text-muted-foreground">{abbreviateCity(event.venueName)}</p>
                                 {isPendingPublish && (
                                   <Badge variant="secondary" className="bg-primary/12 text-primary">
                                     Pending Publish
@@ -7045,11 +7257,32 @@ export default function App() {
                           </div>
                         </TableCell>
 
-                        <TableCell className="text-center">
-                          <EventHealthBadge score={event.eventHealth} />
+                        <TableCell className={cn("text-center sticky left-[340px] z-[1] has-[:hover]:z-[20]", stickyBg)}>
+                          <EventHealthBadge score={event.eventHealth} event={event} />
                         </TableCell>
 
-                        <TableCell>
+                        <TableCell className={cn("text-center sticky left-[420px] z-[1] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]", stickyBg)}>
+                          <select
+                            value={dummyPriceTier}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const next = e.target.value;
+                              setPriceChangeWarning({
+                                title: "Confirm Price Tier Change",
+                                message: `Change price tier for "${event.event}" from ${dummyPriceTier} to ${next}?`,
+                                onConfirm: () => setEventPriceTiers((prev) => ({ ...prev, [event.id]: next })),
+                              });
+                            }}
+                            className="h-6 rounded border border-border/50 bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:border-border transition-colors"
+                          >
+                            {PRICE_TIERS.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </TableCell>
+
+                        <TableCell className="border-l border-border/40">
                           <div>
                             <p className="text-foreground">{formatStartDate(event.startTimeValue)}</p>
                             <p className="text-xs text-muted-foreground">
@@ -7062,39 +7295,36 @@ export default function App() {
                             ? `${event.daysInMarket} / ${event.salesWindowDays}`
                             : event.daysInMarket ?? "--"}
                         </TableCell>
-                        <TableCell>
-                          {formatCycleComplete(event.daysInMarket, event.salesWindowDays)}
+                        <TableCell className="text-[11px] text-muted-foreground/80">
+                          {formatLastChange(event.lastPriceChangedAt)}
                         </TableCell>
+
                         <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
                           {domePriceRange}
                         </TableCell>
-                        <TableCell className="text-center">
-                          {event.hallAtp !== null ? formatCurrency(event.hallAtp) : "--"}
-                        </TableCell>
-                        <TableCell className="text-center border-r border-border/40">
-                          {event.gaAtp !== null ? formatCurrency(event.gaAtp) : "--"}
-                        </TableCell>
-                        <TableCell className="text-center border-l border-border/40">
-                          {event.domeSold !== null ? formatWholeNumber(event.domeSold) : "--"}
-                        </TableCell>
+                        <SoldAvailCell sold={event.domeSold} avail={domeAvail} event={event} />
                         <TableCell className="text-center">
                           {event.domeSoldProjected !== null ? formatWholeNumber(event.domeSoldProjected) : "--"}
                         </TableCell>
                         <TableCell className="text-center border-r border-border/40">
                           <SellThroughBar pct={event.soldPct} />
                         </TableCell>
-                        <TableCell className="text-center">
-                          {event.hallSold !== null ? formatWholeNumber(event.hallSold) : "--"}
+
+                        <TableCell className="text-center border-l border-border/40">
+                          {event.hallAtp !== null ? formatCurrency(event.hallAtp) : "--"}
                         </TableCell>
+                        <SoldAvailCell sold={event.hallSold} avail={hallAvail} event={event} />
                         <TableCell className="text-center">
                           {event.hallSoldProjected !== null ? formatWholeNumber(event.hallSoldProjected) : "--"}
                         </TableCell>
                         <TableCell className="text-center border-r border-border/40">
                           <SellThroughBar pct={event.hallSoldPct} />
                         </TableCell>
-                        <TableCell className="text-center">
-                          {event.gaSold !== null ? formatWholeNumber(event.gaSold) : "--"}
+
+                        <TableCell className="text-center border-l border-border/40">
+                          {event.gaAtp !== null ? formatCurrency(event.gaAtp) : "--"}
                         </TableCell>
+                        <SoldAvailCell sold={event.gaSold} avail={gaAvail} event={event} />
                         <TableCell className="text-center">
                           {event.gaSoldProjected !== null ? formatWholeNumber(event.gaSoldProjected) : "--"}
                         </TableCell>
@@ -7202,8 +7432,14 @@ export default function App() {
 
                       {isExpanded && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                          <TableCell colSpan={20} className="p-0">
+                          <TableCell colSpan={22} className="p-0">
                             <div className="mx-5 my-4 max-w-[1100px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
+                              <div className="flex items-center gap-4 border-b border-border/50 px-4 py-2 bg-secondary/10">
+                                <span className="text-[11px] text-muted-foreground">
+                                  <span className="font-medium">Event last change:</span>{" "}
+                                  <span>{formatLastChange(event.lastPriceChangedAt)}</span>
+                                </span>
+                              </div>
                               {hasSeatGroups ? (
                                 <>
                                   <div className="sticky top-[68.5px] z-[5] bg-card">
@@ -7264,10 +7500,11 @@ export default function App() {
                                           />
                                         </TableHead>
                                         <TableHead className="w-[120px] whitespace-nowrap">Seat Group</TableHead>
+                                        <TableHead className="w-[110px] whitespace-nowrap text-muted-foreground/70">Last Change</TableHead>
                                         <TableHead className="w-[100px] whitespace-nowrap">Original Price</TableHead>
                                         <TableHead className="w-[130px] whitespace-nowrap">Current Price</TableHead>
-                                        <TableHead className="w-[100px] whitespace-nowrap text-center">% Sold</TableHead>
-                                        <TableHead className="w-[80px] whitespace-nowrap">Tkt Rem.</TableHead>
+                                        <TableHead className="w-[100px] whitespace-nowrap text-center">%</TableHead>
+                                        <TableHead className="w-[110px] whitespace-nowrap">Sold / Avail. Inv</TableHead>
                                         <TableHead className="w-[110px] whitespace-nowrap">Proj. Revenue</TableHead>
                                         <TableHead className="w-[80px] whitespace-nowrap">Yield</TableHead>
                                       </TableRow>
@@ -7347,6 +7584,7 @@ export default function App() {
                                             </button>
                                           )}
                                         </TableCell>
+                                        <TableCell className="text-muted-foreground/70 text-[11px]">{formatLastChange(seatGroup.lastPriceChangedAt)}</TableCell>
                                         <TableCell>{formatCurrency(seatGroup.originalPrice)}</TableCell>
                                         <TableCell>
                                           <div className="flex flex-col items-start gap-1">
@@ -7429,7 +7667,15 @@ export default function App() {
                                           </div>
                                         </TableCell>
                                         <TableCell className="text-center"><SellThroughBar pct={seatGroup.soldPct} compact /></TableCell>
-                                        <TableCell>{seatGroup.ticketsRemaining}</TableCell>
+                                        <TableCell className="tabular-nums">
+                                          {(() => {
+                                            const sold = computeSgTicketsSold(seatGroup);
+                                            const avail = sold !== null ? sold + seatGroup.ticketsRemaining : null;
+                                            return sold !== null && avail !== null
+                                              ? `${formatWholeNumber(sold)} / ${formatWholeNumber(avail)}`
+                                              : `— / —`;
+                                          })()}
+                                        </TableCell>
                                         <TableCell>{formatCurrency(seatGroup.projectedRevenue)}</TableCell>
                                         <TableCell>{formatCurrency(seatGroup.yield)}</TableCell>
                                           </TableRow>
