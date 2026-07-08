@@ -45,7 +45,7 @@ export function ChannelAttribution({ event }: ChannelAttributionProps) {
 
   return (
     <section
-      className="rounded-xl border bg-background p-4 sm:p-5"
+      className="rounded-lg border bg-background p-4 sm:p-5"
       aria-label="Channel and buyer-source attribution"
     >
       <div>
@@ -73,7 +73,7 @@ export function ChannelAttribution({ event }: ChannelAttributionProps) {
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[460px] border-collapse text-sm">
           <thead>
-            <tr className="border-b bg-muted/30 text-left text-xs uppercase tracking-[0.06em] text-muted-foreground">
+            <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
               <SortableTh label="Channel" col="label" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableTh label="Tickets" col="tickets" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />
               <SortableTh label="% total" col="pctOfTotal" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} align="right" />

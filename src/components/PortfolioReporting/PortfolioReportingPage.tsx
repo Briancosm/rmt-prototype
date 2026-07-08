@@ -59,9 +59,9 @@ export function PortfolioReportingPage({ events, onViewEvent }: PortfolioReporti
   return (
     <div className="space-y-5">
       {/* Filter bar */}
-      <section className="overflow-hidden rounded-xl border bg-card/95 shadow-sm backdrop-blur">
+      <section className="overflow-hidden rounded-lg border bg-card/95 shadow-sm">
         <div className="border-b px-4 py-2 sm:px-6">
-          <p className="text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">Filters</p>
+          <p className="text-xs font-medium text-muted-foreground">Filters</p>
         </div>
         <FilterBar
           filters={filters}
@@ -85,7 +85,7 @@ export function PortfolioReportingPage({ events, onViewEvent }: PortfolioReporti
       </div>
 
       {/* Event table */}
-      <section className="overflow-hidden rounded-xl border bg-card/95 shadow-sm backdrop-blur">
+      <section className="overflow-hidden rounded-lg border bg-card/95 shadow-sm">
         <div className="flex items-center justify-between border-b px-4 py-3 sm:px-6">
           <p className="text-sm font-semibold text-foreground">
             All Events
@@ -101,7 +101,7 @@ export function PortfolioReportingPage({ events, onViewEvent }: PortfolioReporti
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] border-collapse text-sm">
               <thead>
-                <tr className="border-b bg-muted/30 text-left text-xs uppercase tracking-[0.06em] text-muted-foreground">
+                <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
                   <th className="px-4 py-2.5 font-medium sm:px-6">Event</th>
                   <th className="px-3 py-2.5 font-medium">Location</th>
                   <th className="px-3 py-2.5 font-medium">Category</th>

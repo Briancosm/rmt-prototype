@@ -28,7 +28,7 @@ export function VarianceSummary({ event }: VarianceSummaryProps) {
 
   return (
     <section
-      className="rounded-xl border bg-background p-4 sm:p-5"
+      className="rounded-lg border bg-background p-4 sm:p-5"
       aria-label="Revenue variance summary"
     >
       <div className="flex items-center justify-between">
@@ -46,18 +46,18 @@ export function VarianceSummary({ event }: VarianceSummaryProps) {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border bg-secondary/20 p-3">
-          <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-[11px] font-medium text-muted-foreground">
             Actual Revenue
           </p>
-          <p className="mt-1 font-heading text-2xl font-semibold tabular-nums text-foreground">
+          <p className="mt-1 font-heading text-base font-semibold tabular-nums text-foreground">
             {formatUsd(kpis.currentRevenue)}
           </p>
         </div>
         <div className="rounded-lg border bg-secondary/20 p-3">
-          <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-[11px] font-medium text-muted-foreground">
             Expected Revenue
           </p>
-          <p className="mt-1 font-heading text-2xl font-semibold tabular-nums text-muted-foreground">
+          <p className="mt-1 font-heading text-base font-semibold tabular-nums text-muted-foreground">
             {formatUsd(kpis.expectedRevenue)}
           </p>
         </div>
@@ -65,7 +65,7 @@ export function VarianceSummary({ event }: VarianceSummaryProps) {
 
       <div className="mt-3 flex items-end justify-between gap-3 rounded-lg border bg-background p-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+          <p className="text-[11px] font-medium text-muted-foreground">
             Variance to date
           </p>
           <p

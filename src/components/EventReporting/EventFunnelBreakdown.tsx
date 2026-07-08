@@ -31,7 +31,7 @@ export function EventFunnelBreakdown({ event }: EventFunnelBreakdownProps) {
   const model = useMemo(() => generateFunnelData(event), [event]);
 
   return (
-    <section className="rounded-xl border bg-background p-4 sm:p-5" aria-label="Event funnel breakdown">
+    <section className="rounded-lg border bg-background p-4 sm:p-5" aria-label="Event funnel breakdown">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-heading text-lg font-semibold text-foreground">Funnel Breakdown</h3>
@@ -118,7 +118,7 @@ function StageRow({ stage }: { stage: FunnelStage }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
+      <p className="text-[10px] font-medium text-muted-foreground">{label}</p>
       <p className="font-semibold tabular-nums text-foreground">{value}</p>
     </div>
   );

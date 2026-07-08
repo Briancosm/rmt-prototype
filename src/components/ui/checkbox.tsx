@@ -40,7 +40,7 @@ const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
           isActive
             ? "border-primary bg-primary text-primary-foreground"
             : "border-border bg-background text-transparent hover:border-primary/60",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
           "disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}

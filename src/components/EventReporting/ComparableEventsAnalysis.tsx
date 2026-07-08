@@ -32,7 +32,7 @@ export function ComparableEventsAnalysis({ event }: ComparableEventsAnalysisProp
 
   return (
     <section
-      className="rounded-xl border bg-background p-4 sm:p-5"
+      className="rounded-lg border bg-background p-4 sm:p-5"
       aria-label="Comparable events analysis"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -51,7 +51,7 @@ export function ComparableEventsAnalysis({ event }: ComparableEventsAnalysisProp
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse text-sm">
           <thead>
-            <tr className="border-b bg-muted/30 text-left text-xs uppercase tracking-[0.06em] text-muted-foreground">
+            <tr className="border-b bg-muted/30 text-left text-xs font-medium text-muted-foreground">
               <th className="px-3 py-2.5 font-medium">Event</th>
               <th className="px-3 py-2.5 font-medium">Date</th>
               <th className="px-3 py-2.5 font-medium">Price range</th>

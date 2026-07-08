@@ -318,7 +318,7 @@ function KpiCard({
 }) {
   return (
     <div className="rounded-lg border bg-background/60 px-4 py-2.5 text-right min-w-[120px]">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
+      <p className="text-[10px] font-semibold text-muted-foreground">{label}</p>
       <p className={cn("mt-0.5 text-base font-bold tabular-nums", valueClass)}>{value}</p>
     </div>
   );
@@ -341,7 +341,7 @@ export function TrendingTable({ events, roasRows }: TrendingTableProps) {
   );
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-card/95 shadow-sm backdrop-blur">
+    <section className="overflow-hidden rounded-lg border bg-card/95 shadow-sm">
       {/* Header — same style as All Events section */}
       <div className="border-b px-4 py-3 sm:px-6">
         <p className="text-sm font-semibold text-foreground">Trending by Metric</p>

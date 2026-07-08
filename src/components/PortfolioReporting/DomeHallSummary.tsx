@@ -18,7 +18,7 @@ export function DomeHallSummary({ model }: DomeHallSummaryProps) {
   const noData = model.dome.eventCount === 0 && model.hall.eventCount === 0;
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-card/95 shadow-sm backdrop-blur">
+    <section className="overflow-hidden rounded-lg border bg-card/95 shadow-sm">
       <div className="border-b px-4 py-3 sm:px-5">
         <h3 className="text-sm font-semibold text-foreground">Dome vs. Hall Summary</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">Aggregate ticket sales by section across filtered events</p>
@@ -30,7 +30,7 @@ export function DomeHallSummary({ model }: DomeHallSummaryProps) {
         <div className="divide-y">
           {/* Revenue share bar */}
           <div className="px-4 py-4 sm:px-5">
-            <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Revenue Share</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Revenue Share</p>
             <div className="flex h-5 overflow-hidden rounded-full">
               <div
                 className="h-full bg-primary"
@@ -63,7 +63,7 @@ export function DomeHallSummary({ model }: DomeHallSummaryProps) {
 function SectionCard({ section, color, barColor }: { section: SectionSummary; color: string; barColor: string }) {
   return (
     <div className="bg-card px-4 py-4 sm:px-5">
-      <p className={cn("text-xs font-semibold uppercase tracking-[0.1em]", color)}>{section.label}</p>
+      <p className={cn("text-xs font-semibold", color)}>{section.label}</p>
       <p className="mt-0.5 text-[10px] text-muted-foreground">{section.eventCount} event{section.eventCount !== 1 ? "s" : ""}</p>
 
       {/* Sell-through bar */}

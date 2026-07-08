@@ -13,7 +13,7 @@ export function MarketingSiteMetrics({ metrics }: MarketingSiteMetricsProps) {
   const noData = metrics.totalSessions === 0;
 
   return (
-    <section className="overflow-hidden rounded-xl border bg-card/95 shadow-sm backdrop-blur">
+    <section className="overflow-hidden rounded-lg border bg-card/95 shadow-sm">
       <div className="border-b px-4 py-3 sm:px-5">
         <h3 className="text-sm font-semibold text-foreground">Marketing &amp; Site Metrics</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">Aggregate across filtered events</p>
@@ -52,7 +52,7 @@ export function MarketingSiteMetrics({ metrics }: MarketingSiteMetricsProps) {
 
           {/* Channel mix bar */}
           <div className="px-4 py-4 sm:px-5">
-            <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Traffic Mix</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">Traffic Mix</p>
             <div className="flex h-5 w-full overflow-hidden rounded-full">
               {[
                 { label: "Direct", pct: metrics.directPct, color: "bg-primary" },
@@ -110,7 +110,7 @@ export function MarketingSiteMetrics({ metrics }: MarketingSiteMetricsProps) {
 function Metric({ label, value, sub, accent }: { label: string; value: string; sub: React.ReactNode; accent?: string }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="text-[10px] font-medium text-muted-foreground">{label}</p>
       <p className={cn("mt-0.5 font-heading text-xl font-semibold tabular-nums", accent ?? "text-foreground")}>{value}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
     </div>

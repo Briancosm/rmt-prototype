@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
@@ -11,7 +11,9 @@ import {
   ChevronRight,
   MoreHorizontal,
   Pencil,
+  Plus,
   Search,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 
@@ -44,6 +46,16 @@ import { cn } from "@/lib/utils";
 import { EventReportingDeepDive } from "@/components/EventReporting/EventReportingDeepDive";
 import { PortfolioReportingPage } from "@/components/PortfolioReporting/PortfolioReportingPage";
 import { generatePortfolioEvents } from "@/mocks/portfolioEventPool";
+import {
+  buildSeatGroupRecommendation,
+  confidenceTierFor,
+  confidenceTierLabels,
+  summarizeRecommendations,
+  type ConfidenceTier,
+  type SeatGroupRecommendation,
+} from "@/lib/recommendationEngine";
+import { ConfidenceBadge } from "@/components/PricingRecommendations/ConfidenceBadge";
+import { RecommendationDetailModal } from "@/components/PricingRecommendations/RecommendationDetailModal";
 
 type EventStatus = "On Sale" | "Unpublished";
 type AttentionFlag = "underperforming" | null;
@@ -1020,6 +1032,46 @@ function formatLastChange(iso: string | undefined): string {
   return `${m}/${day}/${yr} ${h12}:${min}${suffix}`;
 }
 
+function LastChangeHover({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+
+  return (
+    <div
+      ref={triggerRef}
+      className={cn("w-fit", className)}
+      onMouseEnter={() => {
+        const rect = triggerRef.current?.getBoundingClientRect();
+        if (rect) {
+          setPosition({ x: rect.left, y: rect.bottom });
+        }
+      }}
+      onMouseLeave={() => setPosition(null)}
+    >
+      {children}
+      {position !== null &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[120] whitespace-nowrap rounded-md border border-border/80 bg-card px-2.5 py-1.5 text-[11px] shadow-md"
+            style={{ left: position.x, top: position.y + 4 }}
+          >
+            <span className="text-muted-foreground">Last change:</span>{" "}
+            <span className="font-medium text-foreground">{label}</span>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 function formatCurrency(value: number | null): string {
   if (value === null) {
     return "--";
@@ -1213,6 +1265,105 @@ function SoldAvailCell({
   );
 }
 
+function TicketSalesCell({
+  sold,
+  avail,
+  projected,
+  pct,
+  event,
+  className,
+}: {
+  sold: number | null;
+  avail: number | null;
+  projected: number | null;
+  pct: number | null;
+  event: EventRecord;
+  className?: string;
+}) {
+  if (sold === null || avail === null || avail <= 0) {
+    return <TableCell className={cn("text-center tabular-nums", className)}>--</TableCell>;
+  }
+
+  const soldPct = clamp((sold / avail) * 100, 0, 100);
+  const displayPct = pct ?? Math.round(soldPct);
+  const projPct = projected !== null ? clamp((projected / avail) * 100, 0, 100) : null;
+  const { groupSales, consumer } = getSoldBreakdown(sold, event);
+  const barColor = displayPct >= 75 ? "bg-success" : displayPct >= 51 ? "bg-primary" : "bg-warning";
+  const tintColor =
+    displayPct >= 75 ? "bg-success/25" : displayPct >= 51 ? "bg-primary/25" : "bg-warning/25";
+  const pctColor =
+    displayPct >= 75 ? "text-success" : displayPct >= 51 ? "text-primary" : "text-warning";
+
+  return (
+    <TableCell className={cn("tabular-nums", className)}>
+      <div className="group relative mx-auto w-[150px]">
+        <div className="flex items-baseline justify-between text-xs">
+          <span className="cursor-help underline decoration-dotted underline-offset-4 transition-colors hover:text-primary">
+            {formatWholeNumber(sold)} / {formatWholeNumber(avail)}
+          </span>
+          <span className={cn("font-semibold", pctColor)}>{displayPct}%</span>
+        </div>
+        <div className="relative mt-1 h-1.5 rounded-full bg-muted-foreground/20">
+          {projPct !== null && (
+            <div
+              className={cn("absolute inset-y-0 left-0 rounded-full", tintColor)}
+              style={{ width: `${projPct}%` }}
+            />
+          )}
+          <div
+            className={cn("absolute inset-y-0 left-0 rounded-full", barColor)}
+            style={{ width: `${soldPct}%` }}
+          />
+          {projPct !== null && (
+            <div
+              className="absolute -bottom-0.5 -top-0.5 w-px bg-foreground/70"
+              style={{ left: `${projPct}%` }}
+            />
+          )}
+        </div>
+        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-[210px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 text-left shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+          <p className="mb-2 text-xs font-semibold text-foreground">Ticket Sales</p>
+          <ul className="space-y-1.5">
+            <li className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-foreground">Sold</span>
+              <span className="text-muted-foreground">
+                {formatWholeNumber(sold)} ({Math.round(soldPct)}%)
+              </span>
+            </li>
+            {projected !== null && (
+              <li className="flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium text-foreground">Projected Sold</span>
+                <span className="text-muted-foreground">
+                  {formatWholeNumber(projected)}
+                  {projPct !== null ? ` (${Math.round(projPct)}%)` : ""}
+                </span>
+              </li>
+            )}
+            <li className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-foreground">Available</span>
+              <span className="text-muted-foreground">{formatWholeNumber(avail)}</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-foreground">Remaining</span>
+              <span className="text-muted-foreground">
+                {formatWholeNumber(Math.max(0, avail - sold))}
+              </span>
+            </li>
+            <li className="mt-1 flex items-center justify-between gap-3 border-t border-border/60 pt-1.5 text-xs">
+              <span className="font-medium text-foreground">Group Sales</span>
+              <span className="text-muted-foreground">{formatWholeNumber(groupSales)}</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 text-xs">
+              <span className="font-medium text-foreground">Consumer</span>
+              <span className="text-muted-foreground">{formatWholeNumber(consumer)}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </TableCell>
+  );
+}
+
 function getNetTicketRevenueBreakdown(event: EventRecord): {
   groupSales: number | null;
   consumer: number | null;
@@ -1350,16 +1501,28 @@ function getAttentionSummary(event: EventRecord): string {
 }
 
 
+const confidenceTierTextStyles: Record<ConfidenceTier, string> = {
+  high: "text-success",
+  medium: "text-warning",
+  low: "text-destructive",
+};
+
+const confidenceTierDotStyles: Record<ConfidenceTier, string> = {
+  high: "bg-success",
+  medium: "bg-warning",
+  low: "bg-destructive",
+};
+
 function EventHealthBadge({ score, event }: { score: number | null; event?: EventRecord }) {
   if (score === null) return <span className="text-muted-foreground text-sm">--</span>;
   const { bg, text, ring } =
     score >= 76
-      ? { bg: "bg-emerald-100", text: "text-emerald-700", ring: "ring-1 ring-emerald-300" }
+      ? { bg: "bg-success/10", text: "text-success", ring: "ring-1 ring-success/30" }
       : score >= 51
-      ? { bg: "bg-blue-100", text: "text-blue-700", ring: "ring-1 ring-blue-300" }
+      ? { bg: "bg-primary/10", text: "text-primary", ring: "ring-1 ring-primary/30" }
       : score >= 26
-      ? { bg: "bg-amber-100", text: "text-amber-700", ring: "ring-1 ring-amber-300" }
-      : { bg: "bg-red-100", text: "text-red-700", ring: "ring-1 ring-red-300" };
+      ? { bg: "bg-warning/10", text: "text-warning", ring: "ring-1 ring-warning/30" }
+      : { bg: "bg-destructive/10", text: "text-destructive", ring: "ring-1 ring-destructive/30" };
 
   const isUnderperforming = event?.attention === "underperforming";
   const reasons = isUnderperforming ? getAttentionReasons(event!) : [];
@@ -1436,7 +1599,7 @@ function PublishedOverlay({ visible }: { visible: boolean }) {
       )}
       aria-live="polite"
     >
-      <span className="inline-flex items-center gap-2 rounded-xl border bg-card px-6 py-3 text-base font-semibold text-foreground shadow-2xl">
+      <span className="inline-flex items-center gap-2 rounded-lg border bg-card px-6 py-3 text-base font-semibold text-foreground shadow-2xl">
         <Check className="h-5 w-5 text-success" />
         Changes published
       </span>
@@ -1465,7 +1628,7 @@ function DraftActionFooter({
   const scopeSuffix = scopeLabel ? ` ${scopeLabel}` : "";
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-[70] border-t border-border/60 bg-white">
+    <footer className="fixed inset-x-0 bottom-0 z-[70] border-t border-border/60 bg-card">
       <div className="mx-auto flex max-w-[1450px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center gap-2">
           <div className={cn("h-1.5 w-1.5 rounded-full", hasChanges ? "bg-warning" : "bg-muted-foreground/30")} />
@@ -1620,6 +1783,7 @@ interface RecommendedReviewChangeRow {
   inputStep: string;
   inputDecimals: number;
   maximum?: number;
+  insight?: SeatGroupRecommendation;
   target:
     | { type: "seat-group-price"; rowId: string }
     | { type: "draft-seat-group-price"; eventId: string; seatGroupId: string }
@@ -1823,7 +1987,7 @@ function PublishConfirmationModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
-      <div className="max-h-[85vh] w-full max-w-5xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
+      <div className="max-h-[85vh] w-full max-w-5xl overflow-hidden rounded-lg border bg-card shadow-2xl">
         <div className="border-b px-6 py-4">
           <h2 className="font-heading text-xl font-semibold text-foreground">Confirm Publish Changes</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -1834,7 +1998,7 @@ function PublishConfirmationModal({
 
         <div className="max-h-[62vh] space-y-5 overflow-y-auto px-6 py-5">
           {Array.from(eventGroups.entries()).map(([eventName, rows]) => (
-            <div key={eventName} className="rounded-xl border border-border/70 overflow-hidden">
+            <div key={eventName} className="rounded-lg border border-border/70 overflow-hidden">
               {/* Event header */}
               <div className="bg-secondary/30 px-4 py-2.5 border-b border-border/60">
                 <p className="text-sm font-semibold text-foreground">{eventName}</p>
@@ -1844,11 +2008,11 @@ function PublishConfirmationModal({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/50 bg-secondary/10">
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-[160px]">Seat Group</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-[130px]">Field</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-[120px]">Previous</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 w-[120px]">Recommended</th>
-                    <th className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">New Value</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-muted-foreground/70 w-[160px]">Seat Group</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-muted-foreground/70 w-[130px]">Field</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-muted-foreground/70 w-[120px]">Previous</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-muted-foreground/70 w-[120px]">Recommended</th>
+                    <th className="px-4 py-2 text-left text-[11px] font-semibold text-muted-foreground/70">New Value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1944,7 +2108,7 @@ function BulkEditEventsModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
-      <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
+      <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg border bg-card shadow-2xl">
         {/* Header */}
         <div className="border-b px-6 py-4">
           <h2 className="font-heading text-xl font-semibold text-foreground">Bulk Edit Events</h2>
@@ -1958,10 +2122,10 @@ function BulkEditEventsModal({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50 bg-secondary/10">
-                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Field</th>
-                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Current</th>
-                <th className="w-[180px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Mode</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">New Value</th>
+                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground/70">Field</th>
+                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground/70">Current</th>
+                <th className="w-[180px] px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground/70">Mode</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground/70">New Value</th>
               </tr>
             </thead>
             <tbody>
@@ -1972,7 +2136,7 @@ function BulkEditEventsModal({
                 return (
                   <Fragment key={group}>
                     <tr className="border-b border-border/40 bg-secondary/10">
-                      <td colSpan={4} className="px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <td colSpan={4} className="px-4 py-2 text-[11px] font-semibold text-muted-foreground">
                         {groupLabel}
                       </td>
                     </tr>
@@ -1998,7 +2162,7 @@ function BulkEditEventsModal({
                                   {summary.detailLabel}
                                 </span>
                                 <div className="pointer-events-none absolute left-0 top-full z-30 mt-1.5 min-w-[200px] rounded-lg border border-border/80 bg-card p-2.5 shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">Events</p>
+                                  <p className="mb-1.5 text-[10px] font-semibold text-muted-foreground/70">Events</p>
                                   <ul className="space-y-1">
                                     {referencedEvents.map((e) => (
                                       <li key={e.id} className="text-xs leading-snug text-foreground">{e.event}</li>
@@ -2250,9 +2414,9 @@ function PriceChangeWarningModal({
   if (!warning) return null;
   return createPortal(
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/45 px-4">
-      <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-2xl">
+      <div className="w-full max-w-sm rounded-lg border bg-card p-6 shadow-2xl">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
           <div>
             <h2 className="font-semibold text-foreground">{warning.title ?? "Large Price Change"}</h2>
             <p className="mt-1 text-sm text-muted-foreground">{warning.message}</p>
@@ -2306,7 +2470,7 @@ function BulkEditSeatGroupsModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
-      <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
+      <div className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-lg border bg-card shadow-2xl">
         <div className="border-b px-6 py-4">
           <h2 className="font-heading text-xl font-semibold text-foreground">Bulk Edit Seat Groups</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -2318,10 +2482,10 @@ function BulkEditSeatGroupsModal({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50 bg-secondary/10">
-                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Field</th>
-                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Current</th>
-                <th className="w-[180px] px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">Mode</th>
-                <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">New Value</th>
+                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground/70">Field</th>
+                <th className="w-[160px] px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground/70">Current</th>
+                <th className="w-[180px] px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground/70">Mode</th>
+                <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground/70">New Value</th>
               </tr>
             </thead>
             <tbody>
@@ -2434,14 +2598,51 @@ function RecommendedReviewModal({
     return count + (!arePriceValuesEqual(parsedValue, row.currentValue) ? 1 : 0);
   }, 0);
 
+  const insights = changeRows.flatMap((row) => (row.insight ? [row.insight] : []));
+  const insightSummary = summarizeRecommendations(insights);
+
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 px-4 py-8">
-      <div className="max-h-[85vh] w-full max-w-5xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
+      <div className="max-h-[85vh] w-full max-w-5xl overflow-hidden rounded-lg border bg-card shadow-2xl">
         <div className="border-b px-6 py-4">
           <h2 className="font-heading text-xl font-semibold text-foreground">Review Recommended Changes</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Review {changeRows.length} recommended change{changeRows.length === 1 ? "" : "s"} and adjust any reviewed value before staging them in draft or publishing them live.
           </p>
+          {insightSummary.count > 0 && insightSummary.model && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                <Sparkles className="h-3.5 w-3.5" />
+                Model insights
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Projected impact if all applied:{" "}
+                <span
+                  className={cn(
+                    "font-semibold",
+                    insightSummary.totalDelta >= 0 ? "text-success" : "text-destructive",
+                  )}
+                >
+                  {insightSummary.totalDelta >= 0 ? "+" : ""}
+                  {formatCurrency(insightSummary.totalDelta)}
+                </span>{" "}
+                (80% interval {insightSummary.totalDeltaLow >= 0 ? "+" : ""}
+                {formatCurrency(insightSummary.totalDeltaLow)} to{" "}
+                {insightSummary.totalDeltaHigh >= 0 ? "+" : ""}
+                {formatCurrency(insightSummary.totalDeltaHigh)})
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Weighted confidence:{" "}
+                <span className="font-semibold text-foreground">
+                  {insightSummary.weightedConfidence}/100
+                </span>
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {insightSummary.tierCounts.high} high · {insightSummary.tierCounts.medium} medium ·{" "}
+                {insightSummary.tierCounts.low} low confidence
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="max-h-[58vh] space-y-4 overflow-y-auto px-6 py-5">
@@ -2449,27 +2650,57 @@ function RecommendedReviewModal({
             const isInvalid = invalidRowIds.has(row.id);
 
             return (
-              <div key={row.id} className="rounded-xl border border-border/70 bg-secondary/15 p-4">
-                <div className="mb-3">
-                  <p className="text-sm font-medium text-foreground">{row.rowLabel}</p>
-                  <p className="text-xs text-muted-foreground">{row.contextLabel}</p>
+              <div key={row.id} className="rounded-lg border border-border/70 bg-secondary/15 p-4">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{row.rowLabel}</p>
+                    <p className="text-xs text-muted-foreground">{row.contextLabel}</p>
+                  </div>
+                  {row.insight && (
+                    <div className="flex flex-col items-end gap-1">
+                      <ConfidenceBadge
+                        score={row.insight.confidenceScore}
+                        tier={row.insight.confidenceTier}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Projected impact:{" "}
+                        <span
+                          className={cn(
+                            "font-semibold",
+                            row.insight.impact.revenueDelta >= 0 ? "text-success" : "text-destructive",
+                          )}
+                        >
+                          {row.insight.impact.revenueDelta >= 0 ? "+" : ""}
+                          {formatCurrency(row.insight.impact.revenueDelta)}
+                        </span>
+                      </p>
+                    </div>
+                  )}
                 </div>
+                {row.insight && (
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {row.insight.drivers[0]?.label}:
+                    </span>{" "}
+                    {row.insight.drivers[0]?.detail}
+                  </p>
+                )}
 
                 <div className="grid gap-2 rounded-lg border border-border/60 bg-card px-3 py-3 sm:grid-cols-3">
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Current</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">Current</p>
                     <p className="mt-1 text-sm text-foreground">
                       {formatRecommendationReviewValue(row.currentValue, row.format)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Suggested</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">Suggested</p>
                     <p className="mt-1 text-sm font-medium text-foreground">
                       {formatRecommendationReviewValue(row.suggestedValue, row.format)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Reviewed Value</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">Reviewed Value</p>
                     <div className="mt-1 flex items-center gap-2">
                       <Input
                         type="number"
@@ -3345,10 +3576,10 @@ function EventRoutePlaceholder({
   onBack: () => void;
 }) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(9,119,180,0.12),_transparent_42%),linear-gradient(180deg,_hsl(210_33%_98%)_0%,_hsl(210_30%_95%)_100%)] px-4 py-8 pb-28 sm:px-6 lg:px-8">
-      <main className="mx-auto max-w-4xl rounded-2xl border bg-card p-8 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)]">
-        <p className="text-sm font-medium uppercase tracking-[0.14em] text-muted-foreground">Event Route</p>
-        <h1 className="mt-2 font-heading text-3xl font-semibold">{title}</h1>
+    <div className="min-h-screen bg-background px-4 py-8 pb-28 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-4xl rounded-lg border bg-card p-8 shadow-sm">
+        <p className="text-sm font-medium text-muted-foreground">Event Route</p>
+        <h1 className="mt-2 font-heading text-xl font-semibold">{title}</h1>
         <p className="mt-2 text-muted-foreground">
           {event
             ? `Event: ${event.event} · Venue: ${event.venueName}`
@@ -3575,6 +3806,17 @@ function EventReportingDashboard({
           format: "currency" as const,
           inputStep: "0.01",
           inputDecimals: 2,
+          insight: buildSeatGroupRecommendation({
+            eventId: event?.id ?? "event",
+            seatGroupId: row.id,
+            currentPrice: row.currentPrice,
+            recommendedPrice: suggestedValue,
+            originalPrice: row.originalPrice,
+            soldPct: row.soldPct,
+            ticketsRemaining: row.ticketsLeft,
+            daysRemaining: event?.daysRemaining,
+            eventHealth: latestHealthScore,
+          }),
           target: { type: "seat-group-price" as const, rowId: row.id },
         },
       ];
@@ -3617,7 +3859,24 @@ function EventReportingDashboard({
     discountRate,
     recommendedMarketingSpend,
     marketingSpend,
+    event?.id,
+    event?.daysRemaining,
   ]);
+  const recommendationInsightSummary = useMemo(
+    () =>
+      summarizeRecommendations(
+        recommendedReviewChangeRows.flatMap((row) => (row.insight ? [row.insight] : [])),
+      ),
+    [recommendedReviewChangeRows],
+  );
+  const netProjectionHalfWidth =
+    recommendationInsightSummary.count > 0
+      ? Math.round(
+          (recommendationInsightSummary.totalDeltaHigh -
+            recommendationInsightSummary.totalDeltaLow) /
+            2,
+        )
+      : Math.round(Math.abs(netProjectionDelta) * 0.18);
   const actionProjectionSeries = useMemo(
     () => {
       const labels = baseEventHealthTrend.map((point) => point.label);
@@ -3999,8 +4258,8 @@ function EventReportingDashboard({
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(9,119,180,0.12),_transparent_42%),linear-gradient(180deg,_hsl(210_33%_98%)_0%,_hsl(210_30%_95%)_100%)] px-4 py-6 pb-28 sm:px-6 lg:px-8">
-      <main className="mx-auto max-w-[1450px] rounded-2xl border bg-card p-4 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)] sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-background px-4 py-6 pb-28 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-[1450px] rounded-lg border bg-card p-4 shadow-sm sm:p-6 lg:p-8">
         <PublishedOverlay visible={showPublishOverlay} />
         <RecommendedReviewModal
           open={showRecommendedReviewModal}
@@ -4017,10 +4276,10 @@ function EventReportingDashboard({
               <button
                 type="button"
                 onClick={onBack}
-                className="flex items-center gap-2 font-heading text-4xl font-semibold tracking-tight text-foreground"
+                className="flex items-center gap-2 font-heading text-xl font-semibold tracking-tight text-foreground"
               >
-                <ArrowLeft className="h-7 w-7" />
-                <span className="text-3xl">{event.event}</span>
+                <ArrowLeft className="h-5 w-5" />
+                <span className="text-xl">{event.event}</span>
               </button>
               <Badge variant={eventPerformance?.mode === "active" ? "success" : "outline"}>
                 {eventPerformance?.mode === "active" ? "Active Event" : "Future Event"}
@@ -4067,37 +4326,37 @@ function EventReportingDashboard({
         </header>
 
         <div className="mt-6">
-          <h2 className="mb-3 font-heading text-2xl font-semibold">Summary</h2>
+          <h2 className="mb-3 font-heading text-base font-semibold">Summary</h2>
           <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 Health Score
               </p>
-              <p className="mt-1 text-2xl font-semibold">{eventPerformance?.healthScore ?? "--"}</p>
+              <p className="mt-1 text-xl font-semibold">{eventPerformance?.healthScore ?? "--"}</p>
             </div>
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Risk Flag</p>
+              <p className="text-[11px] font-medium text-muted-foreground">Risk Flag</p>
               <div className="mt-1">
                 <Badge variant={riskBadgeVariant}>{eventPerformance?.riskFlag ?? "--"}</Badge>
               </div>
             </div>
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 {eventPerformance?.mode === "active"
                   ? "Net Revenue (Right Now)"
                   : "Projected Net Revenue (Current)"}
               </p>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className="mt-1 text-xl font-semibold">
                 {formatCurrency(eventPerformance?.currentNetRevenue ?? 0)}
               </p>
             </div>
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 {eventPerformance?.mode === "active"
                   ? "Expected Revenue (Right Now)"
                   : "Projected Net Revenue (Recommended)"}
               </p>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className="mt-1 text-xl font-semibold">
                 {formatCurrency(
                   eventPerformance?.mode === "active"
                     ? eventPerformance?.expectedRevenueNow ?? 0
@@ -4106,22 +4365,22 @@ function EventReportingDashboard({
               </p>
             </div>
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 {eventPerformance?.mode === "active"
                   ? "Sellthrough (Actual / Expected)"
                   : "Projected Sellthrough (Rec / Baseline)"}
               </p>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className="mt-1 text-xl font-semibold">
                 {eventPerformance?.actualSellthroughNow ?? 0}% / {eventPerformance?.expectedSellthroughNow ?? 0}%
               </p>
             </div>
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 Revenue Vs Expected
               </p>
               <p
                 className={cn(
-                  "mt-1 text-2xl font-semibold",
+                  "mt-1 text-xl font-semibold",
                   (eventPerformance?.revenueVsExpectedPct ?? 0) >= 0 ? "text-success" : "text-destructive",
                 )}
               >
@@ -4130,12 +4389,12 @@ function EventReportingDashboard({
               </p>
             </div>
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 Sellthrough Vs Expected
               </p>
               <p
                 className={cn(
-                  "mt-1 text-2xl font-semibold",
+                  "mt-1 text-xl font-semibold",
                   (eventPerformance?.sellthroughVsExpectedPts ?? 0) >= 0 ? "text-success" : "text-destructive",
                 )}
               >
@@ -4144,10 +4403,10 @@ function EventReportingDashboard({
               </p>
             </div>
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 Pricing Opportunity
               </p>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className="mt-1 text-xl font-semibold">
                 {formatCurrency(eventPerformance?.pricingOpportunity ?? 0)}
               </p>
               <p className="text-xs text-muted-foreground">
@@ -4155,10 +4414,10 @@ function EventReportingDashboard({
               </p>
             </div>
             <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              <p className="text-[11px] font-medium text-muted-foreground">
                 Left-To-Go Tickets
               </p>
-              <p className="mt-1 text-2xl font-semibold">
+              <p className="mt-1 text-xl font-semibold">
                 {formatCompactNumber(eventPerformance?.ticketsRemainingTotal ?? 0)}
               </p>
               <p className="text-xs text-muted-foreground">
@@ -4167,17 +4426,34 @@ function EventReportingDashboard({
             </div>
           </section>
 
-          <section className="mb-6 rounded-xl border bg-background p-4 sm:p-5">
+          <section className="mb-6 rounded-lg border bg-background p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-heading text-2xl font-semibold">Recommended Actions</h2>
+                <h2 className="font-heading text-base font-semibold">Recommended Actions</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Current versus recommended seat-group pricing and offer rate, with projected revenue impact.
                 </p>
               </div>
-              <p className="text-sm font-medium text-muted-foreground">
-                Use the footer to review and stage these recommendations.
-              </p>
+              <div className="flex flex-col items-end gap-1.5">
+                {recommendationInsightSummary.model && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Model refreshed {recommendationInsightSummary.model.refreshedLabel}
+                  </span>
+                )}
+                {recommendationInsightSummary.count > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    Model confidence
+                    <ConfidenceBadge
+                      score={recommendationInsightSummary.weightedConfidence}
+                      tier={confidenceTierFor(recommendationInsightSummary.weightedConfidence)}
+                    />
+                  </span>
+                )}
+                <p className="text-xs font-medium text-muted-foreground">
+                  Use the footer to review and stage these recommendations.
+                </p>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_1fr]">
@@ -4251,7 +4527,7 @@ function EventReportingDashboard({
               </div>
 
               <div className="rounded-lg border p-3">
-                <p className="text-xs uppercase tracking-[0.1em] text-muted-foreground">
+                <p className="text-xs font-medium text-muted-foreground">
                   Revenue Projection
                 </p>
                 <div className="mt-3 overflow-x-auto">
@@ -4340,16 +4616,35 @@ function EventReportingDashboard({
                     {netProjectionDelta >= 0 ? "+" : ""}
                     {formatCurrency(netProjectionDelta)}
                   </span>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    80% interval: {netProjectionDelta - netProjectionHalfWidth >= 0 ? "+" : ""}
+                    {formatCurrency(netProjectionDelta - netProjectionHalfWidth)} to{" "}
+                    {netProjectionDelta + netProjectionHalfWidth >= 0 ? "+" : ""}
+                    {formatCurrency(netProjectionDelta + netProjectionHalfWidth)}
+                  </p>
                 </div>
               </div>
             </div>
+
+            {recommendationInsightSummary.model && (
+              <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Model diagnostics:</span>{" "}
+                trained on a{" "}
+                {recommendationInsightSummary.model.trainingWindowDays}-day window ·{" "}
+                {recommendationInsightSummary.model.comparablesUsed} comparable events · backtest
+                error (MAPE) {recommendationInsightSummary.model.backtestMapePct}% ·{" "}
+                {recommendationInsightSummary.tierCounts.high} high /{" "}
+                {recommendationInsightSummary.tierCounts.medium} medium /{" "}
+                {recommendationInsightSummary.tierCounts.low} low confidence recommendations
+              </p>
+            )}
           </section>
 
           <section className="space-y-6">
-              <div className="rounded-xl border bg-background p-4 sm:p-5">
+              <div className="rounded-lg border bg-background p-4 sm:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h2 className="font-heading text-2xl font-semibold">
+                    <h2 className="font-heading text-base font-semibold">
                       {activePerformanceMetricConfig.title}
                     </h2>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -4359,7 +4654,7 @@ function EventReportingDashboard({
 
                   <div className="grid min-w-[260px] gap-2 sm:grid-cols-3">
                     <div className="rounded-lg border bg-secondary/25 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      <p className="text-[11px] font-medium text-muted-foreground">
                         {activePerformanceMetricConfig.actualLabel}
                       </p>
                       <p className="mt-1 text-lg font-semibold">
@@ -4369,7 +4664,7 @@ function EventReportingDashboard({
                       </p>
                     </div>
                     <div className="rounded-lg border bg-secondary/25 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      <p className="text-[11px] font-medium text-muted-foreground">
                         {activePerformanceMetricConfig.expectedLabel}
                       </p>
                       <p className="mt-1 text-lg font-semibold">
@@ -4379,7 +4674,7 @@ function EventReportingDashboard({
                       </p>
                     </div>
                     <div className="rounded-lg border bg-secondary/25 px-3 py-2">
-                      <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                      <p className="text-[11px] font-medium text-muted-foreground">
                         Variance
                       </p>
                       <p
@@ -4550,7 +4845,7 @@ function EventReportingDashboard({
 
               <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
 
-              <div className="rounded-xl border bg-background p-4 sm:p-5">
+              <div className="rounded-lg border bg-background p-4 sm:p-5">
                 <h3 className="font-heading text-xl font-semibold">Dome vs Hall Summary</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Gross and net breakout across venue areas.
@@ -4609,34 +4904,34 @@ function EventReportingDashboard({
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Dome Gross</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">Dome Gross</p>
                     <p className="mt-1 font-semibold">{formatCurrency(eventPerformance?.domeGrossRevenue ?? 0)}</p>
                   </div>
                   <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Hall Gross</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">Hall Gross</p>
                     <p className="mt-1 font-semibold">{formatCurrency(eventPerformance?.hallGrossRevenue ?? 0)}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-background p-4 sm:p-5">
+              <div className="rounded-lg border bg-background p-4 sm:p-5">
                 <h3 className="font-heading text-xl font-semibold">Marketing + Site Metrics</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   ROAS, funnel traffic, and completion against comparable benchmarks.
                 </p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Ad Spend</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">Ad Spend</p>
                     <p className="mt-1 font-semibold">{formatCurrency(eventPerformance?.adSpend ?? 0)}</p>
                   </div>
                   <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">ROAS / Comp</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">ROAS / Comp</p>
                     <p className="mt-1 font-semibold">
                       {eventPerformance?.roas ?? 0}x / {eventPerformance?.compRoas ?? 0}x
                     </p>
                   </div>
                   <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Funnel Entries</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">Funnel Entries</p>
                     <p className="mt-1 font-semibold">
                       {formatCompactNumber(eventPerformance?.funnelEntries ?? 0)}
                       <span className="ml-1 text-xs text-muted-foreground">
@@ -4645,7 +4940,7 @@ function EventReportingDashboard({
                     </p>
                   </div>
                   <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+                    <p className="text-[11px] font-medium text-muted-foreground">
                       Funnel Completion
                     </p>
                     <p className="mt-1 font-semibold">
@@ -4658,7 +4953,7 @@ function EventReportingDashboard({
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-background">
+              <div className="rounded-lg border bg-background">
                 <div className="overflow-x-auto">
                   <Table className="min-w-[520px]">
                     <TableHeader className="bg-secondary/40">
@@ -4689,9 +4984,9 @@ function EventReportingDashboard({
                 </div>
               </div>
 
-              <div className="rounded-xl border bg-background">
+              <div className="rounded-lg border bg-background">
                 <div className="border-b bg-secondary/30 px-4 py-3 text-center">
-                  <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  <p className="text-xs font-medium text-muted-foreground">
                     Comparable Event
                   </p>
                   <p className="mt-1 text-sm text-foreground">
@@ -4797,6 +5092,10 @@ export default function App() {
   const [showRecommendedReviewModal, setShowRecommendedReviewModal] = useState(false);
   const [recommendedReviewValuesById, setRecommendedReviewValuesById] = useState<Record<string, string>>({});
   const [draftSeatRecommendationUndoById, setDraftSeatRecommendationUndoById] = useState<Record<string, number>>({});
+  const [recommendationDetailTarget, setRecommendationDetailTarget] = useState<{
+    eventId: string;
+    seatGroupId: string;
+  } | null>(null);
   const [priceChangeWarning, setPriceChangeWarning] = useState<{ title?: string; message: string; onConfirm: () => void } | null>(null);
   const [route, setRoute] = useState<ViewRoute>(() => {
     if (typeof window === "undefined") {
@@ -5057,6 +5356,53 @@ export default function App() {
 
     return sorted;
   }, [draftEvents, searchTerm, statusFilter, locationFilter, dateFrom, dateTo, daypartFilter, categoryFilter, weekdayFilter, priceTierFilter, eventPriceTiers, sortState]);
+  const seatGroupRecommendationsByKey = useMemo(() => {
+    const byKey = new Map<string, SeatGroupRecommendation>();
+    for (const event of draftEvents) {
+      for (const seatGroup of event.seatGroups) {
+        byKey.set(
+          `${event.id}:${seatGroup.id}`,
+          buildSeatGroupRecommendation({
+            eventId: event.id,
+            seatGroupId: seatGroup.id,
+            currentPrice: seatGroup.currentPrice,
+            recommendedPrice: seatGroup.recTicketPrice,
+            originalPrice: seatGroup.originalPrice,
+            soldPct: seatGroup.soldPct,
+            ticketsRemaining: seatGroup.ticketsRemaining,
+            daysRemaining: event.daysRemaining,
+            eventHealth: event.eventHealth,
+          }),
+        );
+      }
+    }
+    return byKey;
+  }, [draftEvents]);
+
+  const recommendationDetail = useMemo(() => {
+    if (!recommendationDetailTarget) {
+      return null;
+    }
+
+    const event = draftEvents.find((item) => item.id === recommendationDetailTarget.eventId);
+    const seatGroup = event?.seatGroups.find(
+      (item) => item.id === recommendationDetailTarget.seatGroupId,
+    );
+    const recommendation = seatGroupRecommendationsByKey.get(
+      `${recommendationDetailTarget.eventId}:${recommendationDetailTarget.seatGroupId}`,
+    );
+    if (!event || !seatGroup || !recommendation) {
+      return null;
+    }
+
+    return {
+      event,
+      seatGroup,
+      recommendation,
+      alreadyApplied: arePriceValuesEqual(seatGroup.recTicketPrice, seatGroup.currentPrice),
+    };
+  }, [recommendationDetailTarget, draftEvents, seatGroupRecommendationsByKey]);
+
   const recommendedReviewChangeRows = useMemo<RecommendedReviewChangeRow[]>(
     () =>
       draftEvents.flatMap((event) =>
@@ -5075,6 +5421,7 @@ export default function App() {
               format: "currency" as const,
               inputStep: "0.01",
               inputDecimals: 2,
+              insight: seatGroupRecommendationsByKey.get(`${event.id}:${seatGroup.id}`),
               target: {
                 type: "draft-seat-group-price" as const,
                 eventId: event.id,
@@ -5084,7 +5431,7 @@ export default function App() {
           ];
         }),
       ),
-    [draftEvents],
+    [draftEvents, seatGroupRecommendationsByKey],
   );
 
   const scopedRecommendations = useMemo(() => {
@@ -5982,7 +6329,7 @@ export default function App() {
 
   if (route.type === "mvp-view") {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(9,119,180,0.12),_transparent_42%),linear-gradient(180deg,_hsl(210_33%_98%)_0%,_hsl(210_30%_95%)_100%)] px-4 py-8 pb-28 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-background px-4 py-8 pb-28 sm:px-6 lg:px-8">
         <main className="mx-auto max-w-[1450px]">
           <PriceChangeWarningModal warning={priceChangeWarning} onDismiss={() => setPriceChangeWarning(null)} />
           <PublishedOverlay visible={showPublishOverlay} />
@@ -6001,6 +6348,25 @@ export default function App() {
             onConfirm={stageReviewedRecommendedChanges}
             onConfirmAndPublish={publishReviewedRecommendedChanges}
           />
+          <RecommendationDetailModal
+            open={recommendationDetail !== null}
+            eventName={recommendationDetail?.event.event ?? ""}
+            seatGroupName={recommendationDetail?.seatGroup.name ?? ""}
+            recommendation={recommendationDetail?.recommendation ?? null}
+            alreadyApplied={recommendationDetail?.alreadyApplied ?? false}
+            onClose={() => setRecommendationDetailTarget(null)}
+            onApply={() => {
+              if (recommendationDetail && !recommendationDetail.alreadyApplied) {
+                applyDraftSeatGroupRecommendation(
+                  recommendationDetail.event.id,
+                  recommendationDetail.seatGroup.id,
+                  recommendationDetail.seatGroup.currentPrice,
+                  recommendationDetail.seatGroup.recTicketPrice,
+                );
+              }
+              setRecommendationDetailTarget(null);
+            }}
+          />
           <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
               <button
@@ -6011,7 +6377,7 @@ export default function App() {
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Back to Revenue Management Tool
               </button>
-              <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
+              <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
                 Revenue Management Tool
               </h1>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -6020,7 +6386,7 @@ export default function App() {
             </div>
           </header>
 
-          <section className="overflow-hidden rounded-2xl border bg-card/95 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)] backdrop-blur">
+          <section className="overflow-hidden rounded-lg border bg-card/95 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-2.5 sm:px-6">
               <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
                 {(
@@ -6252,7 +6618,6 @@ export default function App() {
                   <col style={{ width: "170px" }} />
                   <col style={{ width: "180px" }} />
                   <col style={{ width: "150px" }} />
-                  <col style={{ width: "130px" }} />
                   <col style={{ width: "210px" }} />
                   <col style={{ width: "100px" }} />
                   <col style={{ width: "100px" }} />
@@ -6266,31 +6631,31 @@ export default function App() {
                   <col style={{ width: "110px" }} />
                   <col style={{ width: "90px" }} />
                 </colgroup>
-                <TableHeader className="bg-card sticky top-0 z-10 shadow-[0_1px_3px_0_rgba(0,0,0,0.06)]">
+                <TableHeader className="bg-card sticky top-0 z-10 shadow-sm">
                   <TableRow className="bg-card hover:bg-card">
-                    <TableHead colSpan={5} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
+                    <TableHead colSpan={4} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
                       <div className="flex h-full items-center justify-center">
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Event Details</span>
+                        <span className="text-[9px] font-semibold text-muted-foreground/60">Event Details</span>
                       </div>
                     </TableHead>
                     <TableHead colSpan={3} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
                       <div className="flex h-full items-center justify-center">
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Pricing</span>
+                        <span className="text-[9px] font-semibold text-muted-foreground/60">Pricing</span>
                       </div>
                     </TableHead>
                     <TableHead colSpan={3} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
                       <div className="flex h-full items-center justify-center">
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Dome</span>
+                        <span className="text-[9px] font-semibold text-muted-foreground/60">Dome</span>
                       </div>
                     </TableHead>
                     <TableHead colSpan={3} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
                       <div className="flex h-full items-center justify-center">
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Hall</span>
+                        <span className="text-[9px] font-semibold text-muted-foreground/60">Hall</span>
                       </div>
                     </TableHead>
                     <TableHead colSpan={3} className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center">
                       <div className="flex h-full items-center justify-center">
-                        <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">GA</span>
+                        <span className="text-[9px] font-semibold text-muted-foreground/60">GA</span>
                       </div>
                     </TableHead>
                   </TableRow>
@@ -6321,7 +6686,6 @@ export default function App() {
                     </TableHead>
                     <TableHead className="w-[110px] whitespace-nowrap">Days / Window</TableHead>
                     <TableHead className="w-[150px] whitespace-nowrap text-center">Tickets Sold</TableHead>
-                    <TableHead className="w-[130px] whitespace-nowrap text-muted-foreground/70">Last Change</TableHead>
                     <TableHead className="w-[210px] whitespace-nowrap text-center border-r border-border/40">Price Range</TableHead>
                     <TableHead className="w-[100px] whitespace-nowrap text-center border-l border-border/70">Dome ATP</TableHead>
                     <TableHead className="w-[100px] whitespace-nowrap text-center">Price Tier</TableHead>
@@ -6388,7 +6752,9 @@ export default function App() {
                                 aria-label={`Select ${event.event}`}
                               />
                               <div className="min-w-0">
-                                <p className="max-w-[540px] whitespace-normal text-xs leading-tight">{event.event}</p>
+                                <LastChangeHover label={formatLastChange(event.lastPriceChangedAt)}>
+                                  <p className="max-w-[540px] whitespace-normal text-xs leading-tight">{event.event}</p>
+                                </LastChangeHover>
                                 <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                                   <p className="text-xs text-muted-foreground">{abbreviateCity(event.venueName)}</p>
                                   {isPendingPublish && (
@@ -6411,9 +6777,6 @@ export default function App() {
                           </TableCell>
                           <TableCell className="text-center font-medium">
                             {hasSoldData ? formatWholeNumber(totalSold) : "--"}
-                          </TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground/80">
-                            {formatLastChange(event.lastPriceChangedAt)}
                           </TableCell>
                           <TableCell className="whitespace-nowrap border-x border-border/40 text-center">
                             {domePriceRange}
@@ -6464,7 +6827,7 @@ export default function App() {
 
                         {isExpanded && (
                           <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                            <TableCell colSpan={17} className="p-0">
+                            <TableCell colSpan={16} className="p-0">
                               <div className="mx-5 my-4 max-w-[1500px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
                                 <div className="flex items-center gap-4 border-b border-border/50 px-4 py-2 bg-secondary/10">
                                   <span className="text-[11px] text-muted-foreground">
@@ -6520,7 +6883,6 @@ export default function App() {
                                             />
                                           </TableHead>
                                           <TableHead className="whitespace-nowrap">Seat Group</TableHead>
-                                          <TableHead className="whitespace-nowrap text-muted-foreground/70">Last Change</TableHead>
                                           <TableHead className="whitespace-nowrap text-center">Ticket Price</TableHead>
                                           <TableHead className="whitespace-nowrap text-center">Tickets Sold</TableHead>
                                           <TableHead className="whitespace-nowrap text-center">%</TableHead>
@@ -6559,17 +6921,18 @@ export default function App() {
                                                     aria-label={`Seat group name for ${seatGroup.name}`}
                                                   />
                                                 ) : (
-                                                  <button
-                                                    type="button"
-                                                    onDoubleClick={() => beginSeatCellEdit(event.id, seatGroup, "name")}
-                                                    className={cn("rounded px-1 text-left font-medium", isSeatNameDirty ? "text-orange-500" : "text-foreground")}
-                                                    aria-label={`Edit seat group name for ${seatGroup.name}`}
-                                                  >
-                                                    {seatGroup.name}
-                                                  </button>
+                                                  <LastChangeHover label={formatLastChange(seatGroup.lastPriceChangedAt)}>
+                                                    <button
+                                                      type="button"
+                                                      onDoubleClick={() => beginSeatCellEdit(event.id, seatGroup, "name")}
+                                                      className={cn("rounded px-1 text-left font-medium", isSeatNameDirty ? "text-warning" : "text-foreground")}
+                                                      aria-label={`Edit seat group name for ${seatGroup.name}`}
+                                                    >
+                                                      {seatGroup.name}
+                                                    </button>
+                                                  </LastChangeHover>
                                                 )}
                                               </TableCell>
-                                              <TableCell className="text-muted-foreground/70 text-[11px]">{formatLastChange(seatGroup.lastPriceChangedAt)}</TableCell>
                                               <TableCell className="text-center">
                                                 {editingSeatCell?.eventId === event.id && editingSeatCell.seatGroupId === seatGroup.id && editingSeatCell.field === "currentPrice" ? (
                                                   <Input
@@ -6588,7 +6951,7 @@ export default function App() {
                                                   <button
                                                     type="button"
                                                     onDoubleClick={() => beginSeatCellEdit(event.id, seatGroup, "currentPrice")}
-                                                    className={cn("rounded px-1 font-medium", isSeatPriceDirty ? "text-orange-500" : "text-foreground")}
+                                                    className={cn("rounded px-1 font-medium", isSeatPriceDirty ? "text-warning" : "text-foreground")}
                                                     aria-label={`Edit ticket price for ${seatGroup.name}`}
                                                   >
                                                     {formatCurrency(seatGroup.currentPrice)}
@@ -6681,7 +7044,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(9,119,180,0.12),_transparent_42%),linear-gradient(180deg,_hsl(210_33%_98%)_0%,_hsl(210_30%_95%)_100%)] px-4 py-8 pb-28 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background px-4 py-8 pb-28 sm:px-6 lg:px-8">
       <main className="mx-auto max-w-[1450px]">
         <PriceChangeWarningModal warning={priceChangeWarning} onDismiss={() => setPriceChangeWarning(null)} />
         <PublishedOverlay visible={showPublishOverlay} />
@@ -6700,9 +7063,28 @@ export default function App() {
           onConfirm={stageReviewedRecommendedChanges}
           onConfirmAndPublish={publishReviewedRecommendedChanges}
         />
+        <RecommendationDetailModal
+          open={recommendationDetail !== null}
+          eventName={recommendationDetail?.event.event ?? ""}
+          seatGroupName={recommendationDetail?.seatGroup.name ?? ""}
+          recommendation={recommendationDetail?.recommendation ?? null}
+          alreadyApplied={recommendationDetail?.alreadyApplied ?? false}
+          onClose={() => setRecommendationDetailTarget(null)}
+          onApply={() => {
+            if (recommendationDetail && !recommendationDetail.alreadyApplied) {
+              applyDraftSeatGroupRecommendation(
+                recommendationDetail.event.id,
+                recommendationDetail.seatGroup.id,
+                recommendationDetail.seatGroup.currentPrice,
+                recommendationDetail.seatGroup.recTicketPrice,
+              );
+            }
+            setRecommendationDetailTarget(null);
+          }}
+        />
         <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">
+            <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground">
               Revenue Management Tool
             </h1>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
@@ -6753,7 +7135,7 @@ export default function App() {
           />
         )}
 
-        <section className={cn("overflow-hidden rounded-2xl border bg-card/95 shadow-[0_24px_70px_-45px_rgba(15,23,42,0.65)] backdrop-blur", primaryTab === "reporting" && "hidden")}>
+        <section className={cn("overflow-hidden rounded-lg border bg-card/95 shadow-sm", primaryTab === "reporting" && "hidden")}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-card px-4 py-2.5 sm:px-6">
             {/* Filter tabs — shadcn Tabs style */}
             <div className="inline-flex items-center gap-1 rounded-lg bg-muted p-1">
@@ -7009,19 +7391,12 @@ export default function App() {
                 <col style={{width: '80px'}} />
                 <col style={{width: '130px'}} />
                 <col style={{width: '110px'}} />
-                <col style={{width: '90px'}} />
                 <col style={{width: '140px'}} />
-                <col style={{width: '105px'}} />
+                <col style={{width: '170px'}} />
                 <col style={{width: '80px'}} />
-                <col style={{width: '65px'}} />
+                <col style={{width: '170px'}} />
                 <col style={{width: '80px'}} />
-                <col style={{width: '105px'}} />
-                <col style={{width: '80px'}} />
-                <col style={{width: '65px'}} />
-                <col style={{width: '80px'}} />
-                <col style={{width: '105px'}} />
-                <col style={{width: '80px'}} />
-                <col style={{width: '65px'}} />
+                <col style={{width: '170px'}} />
                 <col style={{width: '110px'}} />
                 <col style={{width: '100px'}} />
                 <col style={{width: '90px'}} />
@@ -7031,55 +7406,55 @@ export default function App() {
                 <col style={{width: '80px'}} />
                 <col style={{width: '50px'}} />
               </colgroup>
-              <TableHeader className="bg-card sticky top-0 z-10 shadow-[0_1px_3px_0_rgba(0,0,0,0.06)]">
+              <TableHeader className="bg-card sticky top-0 z-10 shadow-sm">
                 <TableRow className="bg-card hover:bg-card">
                   <TableHead
                     colSpan={3}
                     className="h-5 border-r border-b border-border/60 bg-secondary/20 p-0 sticky left-0 z-30"
                   />
                   <TableHead
+                    colSpan={2}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                  >
+                    <div className="flex h-full items-center justify-center">
+                      <span className="text-[9px] font-semibold text-muted-foreground/60">Schedule</span>
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    colSpan={2}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                  >
+                    <div className="flex h-full items-center justify-center">
+                      <span className="text-[9px] font-semibold text-muted-foreground/60">Dome</span>
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    colSpan={2}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                  >
+                    <div className="flex h-full items-center justify-center">
+                      <span className="text-[9px] font-semibold text-muted-foreground/60">Hall</span>
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    colSpan={2}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                  >
+                    <div className="flex h-full items-center justify-center">
+                      <span className="text-[9px] font-semibold text-muted-foreground/60">GA</span>
+                    </div>
+                  </TableHead>
+                  <TableHead
                     colSpan={3}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Schedule</span>
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    colSpan={4}
-                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
-                  >
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Dome</span>
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    colSpan={4}
-                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
-                  >
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Hall</span>
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    colSpan={4}
-                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
-                  >
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">GA</span>
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    colSpan={3}
-                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
-                  >
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Revenue</span>
+                      <span className="text-[9px] font-semibold text-muted-foreground/60">Revenue</span>
                     </div>
                   </TableHead>
                   <TableHead colSpan={5} className="h-5 border-b border-border/60 bg-secondary/20 p-0 text-center">
                     <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">Funnel Performance</span>
+                      <span className="text-[9px] font-semibold text-muted-foreground/60">Funnel Performance</span>
                     </div>
                   </TableHead>
                 </TableRow>
@@ -7122,19 +7497,12 @@ export default function App() {
                   <TableHead className="w-[110px] whitespace-nowrap">
                     Days / Window
                   </TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap text-muted-foreground/70">Last Change</TableHead>
                   <TableHead className="w-[140px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
-                  <TableHead className="w-[105px] whitespace-nowrap text-center">Sold / Avail.</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-center">Proj.</TableHead>
-                  <TableHead className="w-[65px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
+                  <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
                   <TableHead className="w-[80px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
-                  <TableHead className="w-[105px] whitespace-nowrap text-center">Sold / Avail.</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-center">Proj.</TableHead>
-                  <TableHead className="w-[65px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
+                  <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
                   <TableHead className="w-[80px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
-                  <TableHead className="w-[105px] whitespace-nowrap text-center">Sold / Avail.</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-center">Proj.</TableHead>
-                  <TableHead className="w-[65px] whitespace-nowrap text-center border-r border-border/70">%</TableHead>
+                  <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
                   <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">
                     Net Rev
                   </TableHead>
@@ -7242,9 +7610,11 @@ export default function App() {
                             />
 
                             <div className="min-w-0">
-                              <p className="max-w-[540px] whitespace-normal text-xs leading-tight">
-                                {event.event}
-                              </p>
+                              <LastChangeHover label={formatLastChange(event.lastPriceChangedAt)}>
+                                <p className="max-w-[540px] whitespace-normal text-xs leading-tight">
+                                  {event.event}
+                                </p>
+                              </LastChangeHover>
                               <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                                 <p className="text-xs text-muted-foreground">{abbreviateCity(event.venueName)}</p>
                                 {isPendingPublish && (
@@ -7295,42 +7665,42 @@ export default function App() {
                             ? `${event.daysInMarket} / ${event.salesWindowDays}`
                             : event.daysInMarket ?? "--"}
                         </TableCell>
-                        <TableCell className="text-[11px] text-muted-foreground/80">
-                          {formatLastChange(event.lastPriceChangedAt)}
-                        </TableCell>
 
                         <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
                           {domePriceRange}
                         </TableCell>
-                        <SoldAvailCell sold={event.domeSold} avail={domeAvail} event={event} />
-                        <TableCell className="text-center">
-                          {event.domeSoldProjected !== null ? formatWholeNumber(event.domeSoldProjected) : "--"}
-                        </TableCell>
-                        <TableCell className="text-center border-r border-border/40">
-                          <SellThroughBar pct={event.soldPct} />
-                        </TableCell>
+                        <TicketSalesCell
+                          sold={event.domeSold}
+                          avail={domeAvail}
+                          projected={event.domeSoldProjected}
+                          pct={event.soldPct}
+                          event={event}
+                          className="border-r border-border/40"
+                        />
 
                         <TableCell className="text-center border-l border-border/40">
                           {event.hallAtp !== null ? formatCurrency(event.hallAtp) : "--"}
                         </TableCell>
-                        <SoldAvailCell sold={event.hallSold} avail={hallAvail} event={event} />
-                        <TableCell className="text-center">
-                          {event.hallSoldProjected !== null ? formatWholeNumber(event.hallSoldProjected) : "--"}
-                        </TableCell>
-                        <TableCell className="text-center border-r border-border/40">
-                          <SellThroughBar pct={event.hallSoldPct} />
-                        </TableCell>
+                        <TicketSalesCell
+                          sold={event.hallSold}
+                          avail={hallAvail}
+                          projected={event.hallSoldProjected}
+                          pct={event.hallSoldPct}
+                          event={event}
+                          className="border-r border-border/40"
+                        />
 
                         <TableCell className="text-center border-l border-border/40">
                           {event.gaAtp !== null ? formatCurrency(event.gaAtp) : "--"}
                         </TableCell>
-                        <SoldAvailCell sold={event.gaSold} avail={gaAvail} event={event} />
-                        <TableCell className="text-center">
-                          {event.gaSoldProjected !== null ? formatWholeNumber(event.gaSoldProjected) : "--"}
-                        </TableCell>
-                        <TableCell className="text-center border-r border-border/40">
-                          <SellThroughBar pct={gaSoldPct} />
-                        </TableCell>
+                        <TicketSalesCell
+                          sold={event.gaSold}
+                          avail={gaAvail}
+                          projected={event.gaSoldProjected}
+                          pct={gaSoldPct}
+                          event={event}
+                          className="border-r border-border/40"
+                        />
                         <TableCell
                           className={cn(
                             "border-l border-border/40 text-center px-5",
@@ -7432,7 +7802,7 @@ export default function App() {
 
                       {isExpanded && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                          <TableCell colSpan={22} className="p-0">
+                          <TableCell colSpan={15} className="p-0">
                             <div className="mx-5 my-4 max-w-[1100px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
                               <div className="flex items-center gap-4 border-b border-border/50 px-4 py-2 bg-secondary/10">
                                 <span className="text-[11px] text-muted-foreground">
@@ -7500,9 +7870,8 @@ export default function App() {
                                           />
                                         </TableHead>
                                         <TableHead className="w-[120px] whitespace-nowrap">Seat Group</TableHead>
-                                        <TableHead className="w-[110px] whitespace-nowrap text-muted-foreground/70">Last Change</TableHead>
                                         <TableHead className="w-[100px] whitespace-nowrap">Original Price</TableHead>
-                                        <TableHead className="w-[130px] whitespace-nowrap">Current Price</TableHead>
+                                        <TableHead className="w-[200px] whitespace-nowrap">Current Price</TableHead>
                                         <TableHead className="w-[100px] whitespace-nowrap text-center">%</TableHead>
                                         <TableHead className="w-[110px] whitespace-nowrap">Sold / Avail. Inv</TableHead>
                                         <TableHead className="w-[110px] whitespace-nowrap">Proj. Revenue</TableHead>
@@ -7520,6 +7889,8 @@ export default function App() {
                                           seatGroup.currentPrice,
                                         );
                                         const seatRecommendationKey = `${event.id}:${seatGroup.id}`;
+                                        const seatGroupRecommendation =
+                                          seatGroupRecommendationsByKey.get(seatRecommendationKey);
                                         const isSeatRecommendationUndo =
                                           draftSeatRecommendationUndoById[seatRecommendationKey] !== undefined &&
                                           arePriceValuesEqual(
@@ -7571,99 +7942,153 @@ export default function App() {
                                               aria-label={`Seat group name for ${seatGroup.name}`}
                                             />
                                           ) : (
-                                            <button
-                                              type="button"
-                                              onDoubleClick={() => beginSeatCellEdit(event.id, seatGroup, "name")}
-                                              className={cn(
-                                                "rounded px-1 text-left font-medium",
-                                                isSeatNameDirty ? "text-orange-500" : "text-foreground",
-                                              )}
-                                              aria-label={`Edit seat group name for ${seatGroup.name}`}
-                                            >
-                                              {seatGroup.name}
-                                            </button>
+                                            <LastChangeHover label={formatLastChange(seatGroup.lastPriceChangedAt)}>
+                                              <button
+                                                type="button"
+                                                onDoubleClick={() => beginSeatCellEdit(event.id, seatGroup, "name")}
+                                                className={cn(
+                                                  "rounded px-1 text-left font-medium",
+                                                  isSeatNameDirty ? "text-warning" : "text-foreground",
+                                                )}
+                                                aria-label={`Edit seat group name for ${seatGroup.name}`}
+                                              >
+                                                {seatGroup.name}
+                                              </button>
+                                            </LastChangeHover>
                                           )}
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground/70 text-[11px]">{formatLastChange(seatGroup.lastPriceChangedAt)}</TableCell>
                                         <TableCell>{formatCurrency(seatGroup.originalPrice)}</TableCell>
                                         <TableCell>
-                                          <div className="flex flex-col items-start gap-1">
-                                            {editingSeatCell?.eventId === event.id &&
-                                            editingSeatCell.seatGroupId === seatGroup.id &&
-                                            editingSeatCell.field === "currentPrice" ? (
-                                              <Input
-                                                type="number"
-                                                inputMode="decimal"
-                                                min="0"
-                                                step="0.01"
-                                                autoFocus
-                                                value={editingSeatValue}
-                                                onChange={(selectionEvent) =>
-                                                  setEditingSeatValue(selectionEvent.target.value)
-                                                }
-                                                onKeyDown={(selectionEvent) => {
-                                                  if (selectionEvent.key === "Enter") {
-                                                    commitSeatCellEdit();
+                                          <div className="flex flex-col items-start gap-0.5">
+                                            <div className="flex items-center gap-1.5">
+                                              {editingSeatCell?.eventId === event.id &&
+                                              editingSeatCell.seatGroupId === seatGroup.id &&
+                                              editingSeatCell.field === "currentPrice" ? (
+                                                <Input
+                                                  type="number"
+                                                  inputMode="decimal"
+                                                  min="0"
+                                                  step="0.01"
+                                                  autoFocus
+                                                  value={editingSeatValue}
+                                                  onChange={(selectionEvent) =>
+                                                    setEditingSeatValue(selectionEvent.target.value)
                                                   }
-                                                  if (selectionEvent.key === "Escape") {
-                                                    cancelSeatPriceEdit();
+                                                  onKeyDown={(selectionEvent) => {
+                                                    if (selectionEvent.key === "Enter") {
+                                                      commitSeatCellEdit();
+                                                    }
+                                                    if (selectionEvent.key === "Escape") {
+                                                      cancelSeatPriceEdit();
+                                                    }
+                                                  }}
+                                                  onBlur={cancelSeatPriceEdit}
+                                                  className="h-7 w-[96px] bg-background"
+                                                  aria-label={`Current price for ${seatGroup.name}`}
+                                                />
+                                              ) : isSeatRecommendationUndo ? (
+                                                <span className="px-0.5 tabular-nums text-muted-foreground">
+                                                  {formatCurrency(
+                                                    draftSeatRecommendationUndoById[seatRecommendationKey] ??
+                                                      seatGroup.currentPrice,
+                                                  )}
+                                                </span>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  onDoubleClick={() =>
+                                                    beginSeatCellEdit(event.id, seatGroup, "currentPrice")
                                                   }
-                                                }}
-                                                onBlur={cancelSeatPriceEdit}
-                                                className="h-8 w-[110px] bg-background"
-                                                aria-label={`Current price for ${seatGroup.name}`}
-                                              />
-                                            ) : (
-                                              <button
-                                                type="button"
-                                                onDoubleClick={() =>
-                                                  beginSeatCellEdit(event.id, seatGroup, "currentPrice")
-                                                }
-                                                className={cn(
-                                                  "rounded px-1 text-left",
-                                                  isSeatPriceDirty ? "text-orange-500" : "text-foreground",
-                                                )}
-                                                aria-label={`Edit current price for ${seatGroup.name}`}
-                                              >
-                                                {formatCurrency(seatGroup.currentPrice)}
-                                              </button>
-                                            )}
-                                            <div className="flex items-center gap-1.5 text-xs">
-                                              <span className="text-muted-foreground">Rec.</span>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  isSeatRecommendationUndo
-                                                    ? undoDraftSeatGroupRecommendation(event.id, seatGroup.id)
-                                                    : applyDraftSeatGroupRecommendation(
+                                                  className={cn(
+                                                    "rounded px-0.5 text-left tabular-nums",
+                                                    isSeatPriceDirty ? "text-warning" : "text-foreground",
+                                                  )}
+                                                  aria-label={`Edit current price for ${seatGroup.name}`}
+                                                >
+                                                  {formatCurrency(seatGroup.currentPrice)}
+                                                </button>
+                                              )}
+                                              {isSeatRecommendationUndo ? (
+                                                <>
+                                                  <span aria-hidden className="text-muted-foreground/50">→</span>
+                                                  <span className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/25 bg-primary/5 px-2.5 text-[11px] font-medium text-primary">
+                                                    <Check className="h-3 w-3" />
+                                                    <span className="tabular-nums">
+                                                      {formatCurrency(seatGroup.recTicketPrice)}
+                                                    </span>
+                                                    Staged
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      undoDraftSeatGroupRecommendation(event.id, seatGroup.id)
+                                                    }
+                                                    className="text-[11px] text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+                                                    aria-label={`Undo staged recommended price for ${seatGroup.name}`}
+                                                  >
+                                                    Undo
+                                                  </button>
+                                                </>
+                                              ) : isSeatRecommendationDifferent ? (
+                                                <>
+                                                  <span aria-hidden className="text-muted-foreground/50">→</span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      applyDraftSeatGroupRecommendation(
                                                         event.id,
                                                         seatGroup.id,
                                                         seatGroup.currentPrice,
                                                         seatGroup.recTicketPrice,
                                                       )
-                                                }
-                                                disabled={
-                                                  !isSeatRecommendationDifferent && !isSeatRecommendationUndo
-                                                }
-                                                className={cn(
-                                                  "inline-flex h-6 items-center rounded-full border px-2.5 text-[11px] font-semibold transition",
-                                                  isSeatRecommendationUndo
-                                                    ? "border-warning/50 bg-warning/10 text-warning hover:bg-warning/15"
-                                                    : isSeatRecommendationDifferent
-                                                      ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15"
-                                                      : "cursor-default border-border/70 bg-secondary/20 text-muted-foreground",
-                                                )}
-                                                aria-label={
-                                                  isSeatRecommendationUndo
-                                                    ? `Undo recommended price for ${seatGroup.name}`
-                                                    : `Apply recommended price for ${seatGroup.name}`
-                                                }
-                                              >
-                                                {isSeatRecommendationUndo
-                                                  ? "Undo"
-                                                  : formatCurrency(seatGroup.recTicketPrice)}
-                                              </button>
+                                                    }
+                                                    className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/20"
+                                                    title="Accept recommended price"
+                                                    aria-label={`Accept recommended price of ${formatCurrency(seatGroup.recTicketPrice)} for ${seatGroup.name}`}
+                                                  >
+                                                    <span className="tabular-nums">
+                                                      {formatCurrency(seatGroup.recTicketPrice)}
+                                                    </span>
+                                                    <Plus className="h-3 w-3" />
+                                                  </button>
+                                                </>
+                                              ) : null}
+                                              {(isSeatRecommendationDifferent || isSeatRecommendationUndo) && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setRecommendationDetailTarget({
+                                                      eventId: event.id,
+                                                      seatGroupId: seatGroup.id,
+                                                    })
+                                                  }
+                                                  className="inline-flex h-6 w-6 items-center justify-center rounded-full text-primary/60 transition-colors hover:bg-primary/10 hover:text-primary"
+                                                  aria-label={`View recommendation insights for ${seatGroup.name}`}
+                                                  title="View model insights for this recommendation"
+                                                >
+                                                  <Sparkles className="h-3.5 w-3.5" />
+                                                </button>
+                                              )}
                                             </div>
+                                            {(isSeatRecommendationDifferent || isSeatRecommendationUndo) &&
+                                              seatGroupRecommendation && (
+                                                <span
+                                                  className={cn(
+                                                    "inline-flex items-center gap-1 pl-0.5 text-[10px] font-medium leading-tight",
+                                                    confidenceTierTextStyles[seatGroupRecommendation.confidenceTier],
+                                                  )}
+                                                >
+                                                  <span
+                                                    aria-hidden
+                                                    className={cn(
+                                                      "h-1.5 w-1.5 rounded-full",
+                                                      confidenceTierDotStyles[seatGroupRecommendation.confidenceTier],
+                                                    )}
+                                                  />
+                                                  {confidenceTierLabels[seatGroupRecommendation.confidenceTier]}{" "}
+                                                  confidence
+                                                </span>
+                                              )}
                                           </div>
                                         </TableCell>
                                         <TableCell className="text-center"><SellThroughBar pct={seatGroup.soldPct} compact /></TableCell>

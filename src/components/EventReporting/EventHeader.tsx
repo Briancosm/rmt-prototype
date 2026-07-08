@@ -41,15 +41,15 @@ export function EventHeader({
 
   return (
     <section
-      className="rounded-2xl border bg-card p-5 shadow-[0_18px_50px_-40px_rgba(15,23,42,0.55)] sm:p-6"
+      className="rounded-lg border bg-card p-5 shadow-sm sm:p-6"
       aria-label="Event reporting overview"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="text-[11px] font-medium text-muted-foreground">
             {event.eventCategory} · {event.venueName}
           </p>
-          <h2 className="mt-1 font-heading text-2xl font-semibold tracking-tight text-foreground">
+          <h2 className="mt-1 font-heading text-base font-semibold tracking-tight text-foreground">
             {event.event}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -109,8 +109,8 @@ export function EventHeader({
                   : "text-destructive"
           }
         />
-        <div className="rounded-xl border bg-background p-3">
-          <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Risk Flag</p>
+        <div className="rounded-lg border bg-background p-3">
+          <p className="text-[11px] font-medium text-muted-foreground">Risk Flag</p>
           <span
             className={cn(
               "mt-2 inline-flex items-center rounded-full border px-2.5 py-1 text-sm font-semibold",
@@ -158,12 +158,12 @@ function KpiTile({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border bg-background p-3">
+    <div className="rounded-lg border bg-background p-3">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+        <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
         {icon}
       </div>
-      <p className={cn("mt-1 font-heading text-2xl font-semibold tabular-nums", accent)}>{value}</p>
+      <p className={cn("mt-1 font-heading text-base font-semibold tabular-nums", accent)}>{value}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>
     </div>
   );

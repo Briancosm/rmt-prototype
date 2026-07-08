@@ -88,14 +88,14 @@ export function KpiStrip({ kpis, onAtRiskClick }: KpiStripProps) {
       <button
         type="button"
         onClick={onAtRiskClick}
-        className="rounded-xl border bg-card p-4 shadow-sm text-left transition-colors hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/40"
+        className="rounded-lg border bg-card p-4 shadow-sm text-left transition-colors hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/40"
         aria-label="View at-risk events"
       >
         <div className="flex items-center justify-between">
-          <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Events At Risk</p>
+          <p className="text-[11px] font-medium text-muted-foreground">Events At Risk</p>
           <AlertTriangle className="h-4 w-4 text-warning" />
         </div>
-        <p className={cn("mt-1 font-heading text-2xl font-semibold tabular-nums", kpis.eventsAtRisk > 0 ? "text-warning" : "text-success")}>
+        <p className={cn("mt-1 font-heading text-base font-semibold tabular-nums", kpis.eventsAtRisk > 0 ? "text-warning" : "text-success")}>
           {kpis.eventsAtRisk}
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">
@@ -133,12 +133,12 @@ function KpiCard({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm">
+    <div className="rounded-lg border bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <p className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+        <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
         {icon}
       </div>
-      <p className={cn("mt-1 font-heading text-2xl font-semibold tabular-nums", accent)}>{value}</p>
+      <p className={cn("mt-1 font-heading text-base font-semibold tabular-nums", accent)}>{value}</p>
       <p className="mt-0.5 text-xs">{sub}</p>
     </div>
   );

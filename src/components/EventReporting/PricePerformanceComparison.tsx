@@ -18,7 +18,7 @@ export function PricePerformanceComparison({ event }: PricePerformanceComparison
 
   return (
     <section
-      className="rounded-xl border bg-background p-4 sm:p-5"
+      className="rounded-lg border bg-background p-4 sm:p-5"
       aria-label="Price performance versus comparable events"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -117,7 +117,7 @@ function BarLine({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-12 shrink-0 text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+      <span className="w-12 shrink-0 text-[11px] font-medium text-muted-foreground">
         {label}
       </span>
       <div className="h-4 flex-1 overflow-hidden rounded bg-secondary">

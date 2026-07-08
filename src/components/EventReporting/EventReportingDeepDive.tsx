@@ -30,7 +30,7 @@ export function EventReportingDeepDive({
 
   if (!event) {
     return (
-      <section className="rounded-xl border bg-background p-8 text-center">
+      <section className="rounded-lg border bg-background p-8 text-center">
         <p className="text-sm text-muted-foreground">
           Event not found. Select an event to view its reporting deep-dive.
         </p>

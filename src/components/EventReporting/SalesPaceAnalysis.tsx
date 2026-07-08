@@ -39,7 +39,7 @@ export function SalesPaceAnalysis({ event }: SalesPaceAnalysisProps) {
   const yTicks = evenTicks(yMax, 4);
 
   return (
-    <section className="rounded-xl border bg-background p-4 sm:p-5" aria-label="Sales pace analysis">
+    <section className="rounded-lg border bg-background p-4 sm:p-5" aria-label="Sales pace analysis">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-heading text-lg font-semibold text-foreground">Sales Pace Analysis</h3>
@@ -170,7 +170,7 @@ export function SalesPaceAnalysis({ event }: SalesPaceAnalysisProps) {
 function PaceStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+      <p className="text-[10px] font-medium text-muted-foreground">{label}</p>
       <p className={`font-heading text-lg font-semibold tabular-nums ${accent ?? "text-foreground"}`}>
         {value}
       </p>
