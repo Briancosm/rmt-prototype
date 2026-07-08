@@ -1544,7 +1544,7 @@ function getAttentionSummary(event: EventRecord): string {
 
 // Presentation toggle: when false, model-confidence values and the
 // recommendation-insight entry points are hidden across the app.
-const SHOW_RECOMMENDATION_INSIGHTS: boolean = true;
+const SHOW_RECOMMENDATION_INSIGHTS: boolean = false;
 
 const confidenceTierTextStyles: Record<ConfidenceTier, string> = {
   high: "text-success",
