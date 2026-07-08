@@ -137,7 +137,7 @@ interface EventRecord {
   seatGroups: SeatGroup[];
 }
 
-const initialEvents: EventRecord[] = [
+const rawInitialEvents: EventRecord[] = [
   {
     id: "evt-001",
     event: "Los Angeles Lakers vs. Dallas Mavericks",
@@ -986,6 +986,47 @@ const initialEvents: EventRecord[] = [
   },
 ];
 
+// Dome and Hall sections hold roughly 300 seats each; rescale the raw mock
+// sold/projected counts to that capacity while preserving each event's
+// sellthrough percentages. GA counts are left untouched.
+function normalizeVenueCapacities(events: EventRecord[]): EventRecord[] {
+  return events.map((event, index) => {
+    const domeCapacity = 285 + ((index * 13) % 31);
+    const hallCapacity = 282 + ((index * 17) % 35);
+    const next = { ...event };
+
+    if (event.domeSold !== null && event.soldPct !== null && event.soldPct > 0) {
+      const domeSold = Math.round((domeCapacity * event.soldPct) / 100);
+      const projectionRatio =
+        event.domeSoldProjected !== null && event.domeSold > 0
+          ? event.domeSoldProjected / event.domeSold
+          : null;
+      next.domeSold = domeSold;
+      next.domeSoldProjected =
+        projectionRatio !== null
+          ? Math.min(domeCapacity, Math.round(domeSold * projectionRatio))
+          : event.domeSoldProjected;
+    }
+
+    if (event.hallSold !== null && event.hallSoldPct !== null && event.hallSoldPct > 0) {
+      const hallSold = Math.round((hallCapacity * event.hallSoldPct) / 100);
+      const projectionRatio =
+        event.hallSoldProjected !== null && event.hallSold > 0
+          ? event.hallSoldProjected / event.hallSold
+          : null;
+      next.hallSold = hallSold;
+      next.hallSoldProjected =
+        projectionRatio !== null
+          ? Math.min(hallCapacity, Math.round(hallSold * projectionRatio))
+          : event.hallSoldProjected;
+    }
+
+    return next;
+  });
+}
+
+const initialEvents: EventRecord[] = normalizeVenueCapacities(rawInitialEvents);
+
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -1500,6 +1541,10 @@ function getAttentionSummary(event: EventRecord): string {
   return "Multiple performance indicators are trailing expectations; review pricing and demand metrics for this event.";
 }
 
+
+// Presentation toggle: when false, model-confidence values and the
+// recommendation-insight entry points are hidden across the app.
+const SHOW_RECOMMENDATION_INSIGHTS: boolean = true;
 
 const confidenceTierTextStyles: Record<ConfidenceTier, string> = {
   high: "text-success",
@@ -2631,16 +2676,20 @@ function RecommendedReviewModal({
                 {insightSummary.totalDeltaHigh >= 0 ? "+" : ""}
                 {formatCurrency(insightSummary.totalDeltaHigh)})
               </span>
-              <span className="text-xs text-muted-foreground">
-                Weighted confidence:{" "}
-                <span className="font-semibold text-foreground">
-                  {insightSummary.weightedConfidence}/100
+              {SHOW_RECOMMENDATION_INSIGHTS && (
+                <span className="text-xs text-muted-foreground">
+                  Weighted confidence:{" "}
+                  <span className="font-semibold text-foreground">
+                    {insightSummary.weightedConfidence}/100
+                  </span>
                 </span>
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {insightSummary.tierCounts.high} high · {insightSummary.tierCounts.medium} medium ·{" "}
-                {insightSummary.tierCounts.low} low confidence
-              </span>
+              )}
+              {SHOW_RECOMMENDATION_INSIGHTS && (
+                <span className="text-xs text-muted-foreground">
+                  {insightSummary.tierCounts.high} high · {insightSummary.tierCounts.medium} medium ·{" "}
+                  {insightSummary.tierCounts.low} low confidence
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -2658,10 +2707,12 @@ function RecommendedReviewModal({
                   </div>
                   {row.insight && (
                     <div className="flex flex-col items-end gap-1">
-                      <ConfidenceBadge
-                        score={row.insight.confidenceScore}
-                        tier={row.insight.confidenceTier}
-                      />
+                      {SHOW_RECOMMENDATION_INSIGHTS && (
+                        <ConfidenceBadge
+                          score={row.insight.confidenceScore}
+                          tier={row.insight.confidenceTier}
+                        />
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Projected impact:{" "}
                         <span
@@ -4441,7 +4492,7 @@ function EventReportingDashboard({
                     Model refreshed {recommendationInsightSummary.model.refreshedLabel}
                   </span>
                 )}
-                {recommendationInsightSummary.count > 0 && (
+                {SHOW_RECOMMENDATION_INSIGHTS && recommendationInsightSummary.count > 0 && (
                   <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                     Model confidence
                     <ConfidenceBadge
@@ -4632,10 +4683,14 @@ function EventReportingDashboard({
                 trained on a{" "}
                 {recommendationInsightSummary.model.trainingWindowDays}-day window ·{" "}
                 {recommendationInsightSummary.model.comparablesUsed} comparable events · backtest
-                error (MAPE) {recommendationInsightSummary.model.backtestMapePct}% ·{" "}
-                {recommendationInsightSummary.tierCounts.high} high /{" "}
-                {recommendationInsightSummary.tierCounts.medium} medium /{" "}
-                {recommendationInsightSummary.tierCounts.low} low confidence recommendations
+                error (MAPE) {recommendationInsightSummary.model.backtestMapePct}%
+                {SHOW_RECOMMENDATION_INSIGHTS && (
+                  <>
+                    {" "}· {recommendationInsightSummary.tierCounts.high} high /{" "}
+                    {recommendationInsightSummary.tierCounts.medium} medium /{" "}
+                    {recommendationInsightSummary.tierCounts.low} low confidence recommendations
+                  </>
+                )}
               </p>
             )}
           </section>
@@ -6349,7 +6404,7 @@ export default function App() {
             onConfirmAndPublish={publishReviewedRecommendedChanges}
           />
           <RecommendationDetailModal
-            open={recommendationDetail !== null}
+            open={SHOW_RECOMMENDATION_INSIGHTS && recommendationDetail !== null}
             eventName={recommendationDetail?.event.event ?? ""}
             seatGroupName={recommendationDetail?.seatGroup.name ?? ""}
             recommendation={recommendationDetail?.recommendation ?? null}
@@ -7064,7 +7119,7 @@ export default function App() {
           onConfirmAndPublish={publishReviewedRecommendedChanges}
         />
         <RecommendationDetailModal
-          open={recommendationDetail !== null}
+          open={SHOW_RECOMMENDATION_INSIGHTS && recommendationDetail !== null}
           eventName={recommendationDetail?.event.event ?? ""}
           seatGroupName={recommendationDetail?.seatGroup.name ?? ""}
           recommendation={recommendationDetail?.recommendation ?? null}
@@ -8053,7 +8108,8 @@ export default function App() {
                                                   </button>
                                                 </>
                                               ) : null}
-                                              {(isSeatRecommendationDifferent || isSeatRecommendationUndo) && (
+                                              {SHOW_RECOMMENDATION_INSIGHTS &&
+                                                (isSeatRecommendationDifferent || isSeatRecommendationUndo) && (
                                                 <button
                                                   type="button"
                                                   onClick={() =>
@@ -8070,7 +8126,8 @@ export default function App() {
                                                 </button>
                                               )}
                                             </div>
-                                            {(isSeatRecommendationDifferent || isSeatRecommendationUndo) &&
+                                            {SHOW_RECOMMENDATION_INSIGHTS &&
+                                              (isSeatRecommendationDifferent || isSeatRecommendationUndo) &&
                                               seatGroupRecommendation && (
                                                 <span
                                                   className={cn(
