@@ -5060,7 +5060,7 @@ function EventReportingDashboard({
                 {recommendationInsightSummary.model && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
                     <Sparkles className="h-3.5 w-3.5" />
-                    Model refreshed {recommendationInsightSummary.model.refreshedLabel}
+                    Refreshed {recommendationInsightSummary.model.refreshedLabel}
                   </span>
                 )}
                 {SHOW_RECOMMENDATION_INSIGHTS && recommendationInsightSummary.count > 0 && (
@@ -5294,9 +5294,6 @@ function EventReportingDashboard({
 
             {recommendationInsightSummary.model && (
               <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">Model diagnostics:</span>{" "}
-                trained on a{" "}
-                {recommendationInsightSummary.model.trainingWindowDays}-day window ·{" "}
                 {recommendationInsightSummary.model.comparablesUsed} comparable events · backtest
                 error (MAPE) {recommendationInsightSummary.model.backtestMapePct}%
                 {SHOW_RECOMMENDATION_INSIGHTS && (
