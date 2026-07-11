@@ -1,4 +1,4 @@
-import { ArrowUpRight, BarChart3, GaugeCircle, Sparkles } from "lucide-react";
+import { ArrowUpRight, BarChart3, GaugeCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -22,14 +22,12 @@ interface EventHeaderProps {
   event: ReportingEventInput;
   onAdjustPricing?: () => void;
   onViewComparables?: () => void;
-  onRunScenario?: () => void;
 }
 
 export function EventHeader({
   event,
   onAdjustPricing,
   onViewComparables,
-  onRunScenario,
 }: EventHeaderProps) {
   const kpis = deriveKpis(event);
   const windowProgress =
@@ -65,10 +63,6 @@ export function EventHeader({
           <Button size="sm" variant="outline" onClick={onViewComparables} className="gap-1.5">
             <BarChart3 className="h-4 w-4" />
             View Comparable Events
-          </Button>
-          <Button size="sm" variant="outline" onClick={onRunScenario} className="gap-1.5">
-            <Sparkles className="h-4 w-4" />
-            Run Scenario
           </Button>
         </div>
       </div>
