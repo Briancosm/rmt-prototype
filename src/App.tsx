@@ -2172,7 +2172,7 @@ function EventHealthBadge({ score, event }: { score: number | null; event?: Even
         className={cn(
           "inline-flex h-8 w-8 cursor-help items-center justify-center rounded-full text-xs font-normal ring-2 ring-offset-1",
           bg, text,
-          "ring-warning/60",
+          "ring-destructive/70",
         )}
       >
         {score}
