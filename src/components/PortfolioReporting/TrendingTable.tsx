@@ -210,6 +210,7 @@ const PLOT_W = 720;
 const PLOT_H = 220;
 
 function TrendChart({ series }: { series: SeriesConfig }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const plot = makePlot(PLOT_W, PLOT_H, { left: 52, right: 14, top: 12, bottom: 28 });
   const n = X_LABELS.length;
   const yMax = series.yMax || 1;
@@ -238,6 +239,7 @@ function TrendChart({ series }: { series: SeriesConfig }) {
       width="100%"
       style={{ display: "block" }}
       aria-label={`${series.title} trend chart`}
+      onMouseLeave={() => setHoveredIndex(null)}
     >
       {ticks.map((tick) => {
         const y = scaleY(tick, yMax, plot);
@@ -252,7 +254,7 @@ function TrendChart({ series }: { series: SeriesConfig }) {
             <text
               x={plot.left - 4} y={y}
               textAnchor="end" dominantBaseline="middle"
-              fontSize="10" fill="currentColor" className="text-muted-foreground"
+              fontSize="8" fill="currentColor" className="text-muted-foreground"
             >
               {series.fmtY(tick)}
             </text>
@@ -281,8 +283,15 @@ function TrendChart({ series }: { series: SeriesConfig }) {
         <circle
           key={i}
           cx={c.x.toFixed(1)} cy={c.y.toFixed(1)}
-          r={i === actualCoords.length - 1 ? "4" : "3"}
+          r={hoveredIndex === i ? 5 : i === actualCoords.length - 1 ? 4 : 3}
           fill="var(--color-success, #22c55e)"
+          stroke={hoveredIndex === i ? "hsl(var(--card))" : "none"}
+          strokeWidth={hoveredIndex === i ? 2 : 0}
+          style={{ cursor: "pointer" }}
+          onMouseEnter={() => setHoveredIndex(i)}
+          onFocus={() => setHoveredIndex(i)}
+          onBlur={() => setHoveredIndex(null)}
+          tabIndex={0}
         />
       ))}
 
@@ -292,13 +301,63 @@ function TrendChart({ series }: { series: SeriesConfig }) {
           x={scaleX(i, n, plot).toFixed(1)}
           y={PLOT_H - 5}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="8"
           fill="currentColor"
           className="text-muted-foreground"
         >
           {lbl}
         </text>
       ))}
+
+      {hoveredIndex !== null && (() => {
+        const point = actualCoords[hoveredIndex];
+        const actualValue = series.actualSeries[hoveredIndex];
+        const expectedValue = series.expectedSeries[hoveredIndex];
+        const delta = actualValue - expectedValue;
+        const lines = [
+          `${series.actualLabel}: ${series.fmtKpi(actualValue)}`,
+          `${series.expectedLabel}: ${series.fmtKpi(expectedValue)}`,
+          `${series.deltaLabel}: ${delta >= 0 ? "+" : ""}${series.fmtKpi(delta)}`,
+        ];
+        const label = X_LABELS[hoveredIndex];
+        const title = label === "Now" ? "Timeline: Now" : `Timeline: ${label} ago`;
+        const tooltipWidth = 185;
+        const lineHeight = 13;
+        const tooltipHeight = 24 + lines.length * lineHeight;
+        const placeAbove = point.y - tooltipHeight - 9 >= plot.top;
+        const tooltipX = Math.min(
+          Math.max(point.x - tooltipWidth / 2, plot.left + 2),
+          PLOT_W - plot.right - tooltipWidth - 2,
+        );
+        const tooltipY = placeAbove
+          ? point.y - tooltipHeight - 9
+          : Math.min(point.y + 9, PLOT_H - plot.bottom - tooltipHeight - 2);
+        return (
+          <g transform={`translate(${tooltipX.toFixed(1)},${tooltipY.toFixed(1)})`} pointerEvents="none">
+            <rect
+              width={tooltipWidth}
+              height={tooltipHeight}
+              rx={6}
+              fill="hsl(var(--card))"
+              stroke="hsl(var(--border))"
+            />
+            <text x={10} y={14} fontSize="10" fontWeight={600} fill="hsl(var(--foreground))">
+              {title}
+            </text>
+            {lines.map((line, index) => (
+              <text
+                key={line}
+                x={10}
+                y={29 + index * lineHeight}
+                fontSize="10"
+                fill="hsl(var(--muted-foreground))"
+              >
+                {line}
+              </text>
+            ))}
+          </g>
+        );
+      })()}
     </svg>
   );
 }
