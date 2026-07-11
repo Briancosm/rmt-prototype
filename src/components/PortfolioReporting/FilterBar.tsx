@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -210,16 +211,41 @@ function MultiSelectPill({
   abbrev?: (opt: string) => string;
 }) {
   const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    const handleOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    // The menu is portaled with fixed positioning, so close it if the page
+    // scrolls or resizes rather than letting it drift away from its trigger.
+    const handleScroll = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const handleResize = () => setOpen(false);
+    document.addEventListener("mousedown", handleOutside);
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", handleResize);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", handleResize);
+    };
   }, [open]);
+
+  const toggleOpen = () => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuPosition({ x: rect.left, y: rect.bottom });
+    }
+    setOpen((v) => !v);
+  };
 
   const toggle = (opt: string) => {
     onChange(selected.includes(opt) ? selected.filter((s) => s !== opt) : [...selected, opt]);
@@ -238,7 +264,7 @@ function MultiSelectPill({
     <div className="relative" ref={ref}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         className={cn(
           "flex h-7 items-center gap-1 rounded-md border px-2.5 text-xs font-medium transition-colors",
           active
@@ -265,9 +291,11 @@ function MultiSelectPill({
         {!active && <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />}
       </button>
 
-      {open && (
+      {open && menuPosition !== null && createPortal(
         <div
-          className="absolute top-full left-0 z-50 mt-1 min-w-[160px] rounded-lg border bg-card shadow-lg"
+          ref={menuRef}
+          className="fixed z-[130] min-w-[160px] rounded-lg border bg-card shadow-lg"
+          style={{ left: menuPosition.x, top: menuPosition.y + 4 }}
           role="listbox"
           aria-multiselectable="true"
           aria-label={`${label} options`}
@@ -317,7 +345,8 @@ function MultiSelectPill({
               </button>
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
