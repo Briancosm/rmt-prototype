@@ -12,7 +12,6 @@ import { VarianceSummary } from "./VarianceSummary";
 interface EventReportingDeepDiveProps {
   event: ReportingEventInput | undefined;
   onAdjustPricing?: () => void;
-  onRunScenario?: () => void;
 }
 
 /**
@@ -24,7 +23,6 @@ interface EventReportingDeepDiveProps {
 export function EventReportingDeepDive({
   event,
   onAdjustPricing,
-  onRunScenario,
 }: EventReportingDeepDiveProps) {
   const comparablesRef = useRef<HTMLDivElement>(null);
 
@@ -47,7 +45,6 @@ export function EventReportingDeepDive({
         event={event}
         onAdjustPricing={onAdjustPricing}
         onViewComparables={scrollToComparables}
-        onRunScenario={onRunScenario}
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
