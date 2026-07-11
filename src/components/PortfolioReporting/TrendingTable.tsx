@@ -251,7 +251,7 @@ function TrendChart({ series }: { series: SeriesConfig }) {
             <line
               x1={plot.left} y1={y.toFixed(1)}
               x2={PLOT_W - plot.right} y2={y.toFixed(1)}
-              stroke="currentColor" strokeWidth="1"
+              stroke="currentColor" strokeWidth="0.5"
               className="text-border" strokeOpacity="0.5"
             />
             <text
@@ -271,7 +271,7 @@ function TrendChart({ series }: { series: SeriesConfig }) {
         d={expectedPath}
         fill="none"
         stroke="var(--color-warning, #f97316)"
-        strokeWidth="1.5"
+        strokeWidth="0.9"
         strokeDasharray="5,4"
       />
 
@@ -279,14 +279,14 @@ function TrendChart({ series }: { series: SeriesConfig }) {
         d={actualPath}
         fill="none"
         stroke="var(--color-success, #22c55e)"
-        strokeWidth="2"
+        strokeWidth="1.1"
       />
 
       {actualCoords.map((c, i) => (
         <circle
           key={i}
           cx={c.x.toFixed(1)} cy={c.y.toFixed(1)}
-          r={hoveredIndex === i ? 5 : i === actualCoords.length - 1 ? 4 : 3}
+          r={hoveredIndex === i ? 4 : i === actualCoords.length - 1 ? 3 : 2.2}
           fill="var(--color-success, #22c55e)"
           stroke={hoveredIndex === i ? "hsl(var(--card))" : "none"}
           strokeWidth={hoveredIndex === i ? 2 : 0}
@@ -442,14 +442,14 @@ export function TrendingTable({ events, roasRows }: TrendingTableProps) {
       <div className="flex items-center gap-5 border-t px-4 py-2.5 sm:px-6">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <svg width="20" height="10" viewBox="0 0 20 10">
-            <line x1="0" y1="5" x2="20" y2="5" stroke="var(--color-success, #22c55e)" strokeWidth="2" />
-            <circle cx="10" cy="5" r="3" fill="var(--color-success, #22c55e)" />
+            <line x1="0" y1="5" x2="20" y2="5" stroke="var(--color-success, #22c55e)" strokeWidth="1.5" />
+            <circle cx="10" cy="5" r="2.5" fill="var(--color-success, #22c55e)" />
           </svg>
           {series.actualLabel}
         </span>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <svg width="20" height="10" viewBox="0 0 20 10">
-            <line x1="0" y1="5" x2="20" y2="5" stroke="var(--color-warning, #f97316)" strokeWidth="1.5" strokeDasharray="4,3" />
+            <line x1="0" y1="5" x2="20" y2="5" stroke="var(--color-warning, #f97316)" strokeWidth="1.2" strokeDasharray="4,3" />
           </svg>
           {series.expectedLabel}
         </span>
