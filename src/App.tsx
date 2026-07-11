@@ -1573,6 +1573,64 @@ function formatLastChange(iso: string | undefined): string {
   return `${m}/${day}/${yr} ${h12}:${min}${suffix}`;
 }
 
+// Hover tooltip rendered through a portal with fixed positioning so it can
+// never be clipped or painted over by sticky table cells, scroll containers,
+// or neighboring rows.
+function HoverOverlay({
+  content,
+  children,
+  className,
+  contentClassName,
+  align = "start",
+}: {
+  content: ReactNode;
+  children: ReactNode;
+  className?: string;
+  contentClassName?: string;
+  align?: "start" | "center";
+}) {
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+
+  const openOverlay = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPosition({
+        x: align === "center" ? rect.left + rect.width / 2 : rect.left,
+        y: rect.bottom,
+      });
+    }
+  };
+  const closeOverlay = () => setPosition(null);
+
+  return (
+    <div
+      ref={triggerRef}
+      className={cn("w-fit", className)}
+      onMouseEnter={openOverlay}
+      onMouseLeave={closeOverlay}
+      onFocus={openOverlay}
+      onBlur={closeOverlay}
+    >
+      {children}
+      {position !== null &&
+        createPortal(
+          <div
+            className={cn(
+              "pointer-events-none fixed z-[120] rounded-md border border-border/80 bg-card text-left shadow-lg",
+              align === "center" && "-translate-x-1/2",
+              contentClassName,
+            )}
+            style={{ left: position.x, top: position.y + 5 }}
+          >
+            {content}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 function LastChangeHover({
   label,
   children,
@@ -1582,34 +1640,19 @@ function LastChangeHover({
   children: ReactNode;
   className?: string;
 }) {
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
-
   return (
-    <div
-      ref={triggerRef}
-      className={cn("w-fit", className)}
-      onMouseEnter={() => {
-        const rect = triggerRef.current?.getBoundingClientRect();
-        if (rect) {
-          setPosition({ x: rect.left, y: rect.bottom });
-        }
-      }}
-      onMouseLeave={() => setPosition(null)}
+    <HoverOverlay
+      className={className}
+      contentClassName="whitespace-nowrap px-2.5 py-1.5 text-[11px]"
+      content={
+        <>
+          <span className="text-muted-foreground">Last change:</span>{" "}
+          <span className="font-medium text-foreground">{label}</span>
+        </>
+      }
     >
       {children}
-      {position !== null &&
-        createPortal(
-          <div
-            className="pointer-events-none fixed z-[120] whitespace-nowrap rounded-md border border-border/80 bg-card px-2.5 py-1.5 text-[11px] shadow-md"
-            style={{ left: position.x, top: position.y + 4 }}
-          >
-            <span className="text-muted-foreground">Last change:</span>{" "}
-            <span className="font-medium text-foreground">{label}</span>
-          </div>,
-          document.body,
-        )}
-    </div>
+    </HoverOverlay>
   );
 }
 
@@ -1784,24 +1827,30 @@ function SoldAvailCell({
   const { groupSales, consumer } = getSoldBreakdown(sold, event);
   return (
     <TableCell className={cn("text-center tabular-nums", className)}>
-      <div className="group relative inline-flex">
+      <HoverOverlay
+        className="inline-flex"
+        align="center"
+        contentClassName="w-[200px] p-3"
+        content={
+          <>
+            <p className="mb-2 text-xs font-semibold text-foreground">Sold Breakdown</p>
+            <ul className="space-y-1.5">
+              <li className="flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium text-foreground">Group Sales</span>
+                <span className="text-muted-foreground">{formatWholeNumber(groupSales)}</span>
+              </li>
+              <li className="flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium text-foreground">Consumer</span>
+                <span className="text-muted-foreground">{formatWholeNumber(consumer)}</span>
+              </li>
+            </ul>
+          </>
+        }
+      >
         <span className="cursor-help underline decoration-dotted underline-offset-4 transition-colors hover:text-primary focus:outline-none">
           {formatWholeNumber(sold)} / {formatWholeNumber(avail)}
         </span>
-        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-[200px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 text-left shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-          <p className="mb-2 text-xs font-semibold text-foreground">Sold Breakdown</p>
-          <ul className="space-y-1.5">
-            <li className="flex items-center justify-between gap-3 text-xs">
-              <span className="font-medium text-foreground">Group Sales</span>
-              <span className="text-muted-foreground">{formatWholeNumber(groupSales)}</span>
-            </li>
-            <li className="flex items-center justify-between gap-3 text-xs">
-              <span className="font-medium text-foreground">Consumer</span>
-              <span className="text-muted-foreground">{formatWholeNumber(consumer)}</span>
-            </li>
-          </ul>
-        </div>
-      </div>
+      </HoverOverlay>
     </TableCell>
   );
 }
@@ -1837,70 +1886,78 @@ function TicketSalesCell({
 
   return (
     <TableCell className={cn("tabular-nums", className)}>
-      <div className="group relative mx-auto w-[150px]">
-        <div className="flex items-baseline justify-between text-xs">
-          <span className="cursor-help underline decoration-dotted underline-offset-4 transition-colors hover:text-primary">
-            {formatWholeNumber(sold)} / {formatWholeNumber(avail)}
-          </span>
-          <span className={cn("font-semibold", pctColor)}>{displayPct}%</span>
-        </div>
-        <div className="relative mt-1 h-1.5 rounded-full bg-muted-foreground/20">
-          {projPct !== null && (
-            <div
-              className={cn("absolute inset-y-0 left-0 rounded-full", tintColor)}
-              style={{ width: `${projPct}%` }}
-            />
-          )}
-          <div
-            className={cn("absolute inset-y-0 left-0 rounded-full", barColor)}
-            style={{ width: `${soldPct}%` }}
-          />
-          {projPct !== null && (
-            <div
-              className="absolute -bottom-0.5 -top-0.5 w-px bg-foreground/70"
-              style={{ left: `${projPct}%` }}
-            />
-          )}
-        </div>
-        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-[210px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 text-left shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-          <p className="mb-2 text-xs font-semibold text-foreground">Ticket Sales</p>
-          <ul className="space-y-1.5">
-            <li className="flex items-center justify-between gap-3 text-xs">
-              <span className="font-medium text-foreground">Sold</span>
-              <span className="text-muted-foreground">
-                {formatWholeNumber(sold)} ({Math.round(soldPct)}%)
-              </span>
-            </li>
-            {projected !== null && (
+      <HoverOverlay
+        className="mx-auto"
+        align="center"
+        contentClassName="w-[210px] p-3"
+        content={
+          <>
+            <p className="mb-2 text-xs font-semibold text-foreground">Ticket Sales</p>
+            <ul className="space-y-1.5">
               <li className="flex items-center justify-between gap-3 text-xs">
-                <span className="font-medium text-foreground">Projected Sold</span>
+                <span className="font-medium text-foreground">Sold</span>
                 <span className="text-muted-foreground">
-                  {formatWholeNumber(projected)}
-                  {projPct !== null ? ` (${Math.round(projPct)}%)` : ""}
+                  {formatWholeNumber(sold)} ({Math.round(soldPct)}%)
                 </span>
               </li>
+              {projected !== null && (
+                <li className="flex items-center justify-between gap-3 text-xs">
+                  <span className="font-medium text-foreground">Projected Sold</span>
+                  <span className="text-muted-foreground">
+                    {formatWholeNumber(projected)}
+                    {projPct !== null ? ` (${Math.round(projPct)}%)` : ""}
+                  </span>
+                </li>
+              )}
+              <li className="flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium text-foreground">Available</span>
+                <span className="text-muted-foreground">{formatWholeNumber(avail)}</span>
+              </li>
+              <li className="flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium text-foreground">Remaining</span>
+                <span className="text-muted-foreground">
+                  {formatWholeNumber(Math.max(0, avail - sold))}
+                </span>
+              </li>
+              <li className="mt-1 flex items-center justify-between gap-3 border-t border-border/60 pt-1.5 text-xs">
+                <span className="font-medium text-foreground">Group Sales</span>
+                <span className="text-muted-foreground">{formatWholeNumber(groupSales)}</span>
+              </li>
+              <li className="flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium text-foreground">Consumer</span>
+                <span className="text-muted-foreground">{formatWholeNumber(consumer)}</span>
+              </li>
+            </ul>
+          </>
+        }
+      >
+        <div className="w-[150px]">
+          <div className="flex items-baseline justify-between text-xs">
+            <span className="cursor-help underline decoration-dotted underline-offset-4 transition-colors hover:text-primary">
+              {formatWholeNumber(sold)} / {formatWholeNumber(avail)}
+            </span>
+            <span className={cn("font-semibold", pctColor)}>{displayPct}%</span>
+          </div>
+          <div className="relative mt-1 h-1.5 rounded-full bg-muted-foreground/20">
+            {projPct !== null && (
+              <div
+                className={cn("absolute inset-y-0 left-0 rounded-full", tintColor)}
+                style={{ width: `${projPct}%` }}
+              />
             )}
-            <li className="flex items-center justify-between gap-3 text-xs">
-              <span className="font-medium text-foreground">Available</span>
-              <span className="text-muted-foreground">{formatWholeNumber(avail)}</span>
-            </li>
-            <li className="flex items-center justify-between gap-3 text-xs">
-              <span className="font-medium text-foreground">Remaining</span>
-              <span className="text-muted-foreground">
-                {formatWholeNumber(Math.max(0, avail - sold))}
-              </span>
-            </li>
-            <li className="mt-1 flex items-center justify-between gap-3 border-t border-border/60 pt-1.5 text-xs">
-              <span className="font-medium text-foreground">Group Sales</span>
-              <span className="text-muted-foreground">{formatWholeNumber(groupSales)}</span>
-            </li>
-            <li className="flex items-center justify-between gap-3 text-xs">
-              <span className="font-medium text-foreground">Consumer</span>
-              <span className="text-muted-foreground">{formatWholeNumber(consumer)}</span>
-            </li>
-          </ul>
+            <div
+              className={cn("absolute inset-y-0 left-0 rounded-full", barColor)}
+              style={{ width: `${soldPct}%` }}
+            />
+            {projPct !== null && (
+              <div
+                className="absolute -bottom-0.5 -top-0.5 w-px bg-foreground/70"
+                style={{ left: `${projPct}%` }}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      </HoverOverlay>
     </TableCell>
   );
 }
@@ -2087,7 +2144,30 @@ function EventHealthBadge({ score, event }: { score: number | null; event?: Even
   }
 
   return (
-    <div className="group/health relative inline-block">
+    <HoverOverlay
+      className="inline-block"
+      align="center"
+      contentClassName="w-[320px] p-3"
+      content={
+        <>
+          <p className="mb-2 text-xs font-semibold text-foreground">Flagged Metrics</p>
+          <ul className="space-y-1.5">
+            {reasons.map((r) => (
+              <li key={r.metric} className="flex items-start gap-2 text-xs">
+                <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
+                <span>
+                  <span className="font-medium text-foreground">{r.metric}:</span>{" "}
+                  <span className="text-muted-foreground">{r.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2.5 border-t border-border/60 pt-2 text-xs leading-relaxed text-muted-foreground">
+            {summary}
+          </p>
+        </>
+      }
+    >
       <div
         className={cn(
           "inline-flex h-8 w-8 cursor-help items-center justify-center rounded-full text-xs font-normal ring-2 ring-offset-1",
@@ -2097,24 +2177,7 @@ function EventHealthBadge({ score, event }: { score: number | null; event?: Even
       >
         {score}
       </div>
-      <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 w-[320px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 opacity-0 shadow-xl transition-opacity group-hover/health:pointer-events-auto group-hover/health:opacity-100 text-left">
-        <p className="mb-2 text-xs font-semibold text-foreground">Flagged Metrics</p>
-        <ul className="space-y-1.5">
-          {reasons.map((r) => (
-            <li key={r.metric} className="flex items-start gap-2 text-xs">
-              <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />
-              <span>
-                <span className="font-medium text-foreground">{r.metric}:</span>{" "}
-                <span className="text-muted-foreground">{r.detail}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2.5 border-t border-border/60 pt-2 text-xs leading-relaxed text-muted-foreground">
-          {summary}
-        </p>
-      </div>
-    </div>
+    </HoverOverlay>
   );
 }
 
@@ -2702,19 +2765,24 @@ function BulkEditEventsModal({
                               {summary.valueLabel}
                             </p>
                             {summary.detailLabel && (
-                              <div className="group relative mt-0.5 inline-block">
+                              <HoverOverlay
+                                className="mt-0.5 inline-block"
+                                contentClassName="min-w-[200px] p-2.5"
+                                content={
+                                  <>
+                                    <p className="mb-1.5 text-[10px] font-semibold text-muted-foreground/70">Events</p>
+                                    <ul className="space-y-1">
+                                      {referencedEvents.map((e) => (
+                                        <li key={e.id} className="text-xs leading-snug text-foreground">{e.event}</li>
+                                      ))}
+                                    </ul>
+                                  </>
+                                }
+                              >
                                 <span className="cursor-help text-xs text-muted-foreground underline decoration-dotted underline-offset-2">
                                   {summary.detailLabel}
                                 </span>
-                                <div className="pointer-events-none absolute left-0 top-full z-30 mt-1.5 min-w-[200px] rounded-lg border border-border/80 bg-card p-2.5 shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-                                  <p className="mb-1.5 text-[10px] font-semibold text-muted-foreground/70">Events</p>
-                                  <ul className="space-y-1">
-                                    {referencedEvents.map((e) => (
-                                      <li key={e.id} className="text-xs leading-snug text-foreground">{e.event}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              </div>
+                              </HoverOverlay>
                             )}
                           </td>
 
@@ -4185,6 +4253,7 @@ function EventReportingDashboard({
   const [editingPricingRowId, setEditingPricingRowId] = useState<string | null>(null);
   const [editingPricingValue, setEditingPricingValue] = useState<string>("");
   const [hoveredPerformanceMetricPointId, setHoveredPerformanceMetricPointId] = useState<string | null>(null);
+  const [hoveredActionPointId, setHoveredActionPointId] = useState<string | null>(null);
 
   useEffect(() => {
     const nextRows = buildReportingPricingRows(event);
@@ -4551,6 +4620,8 @@ function EventReportingDashboard({
   );
   const hoveredPerformanceMetricPoint =
     activePerformanceTrendChart.points.find((point) => point.id === hoveredPerformanceMetricPointId) ?? null;
+  const hoveredActionPoint =
+    actionProjectionChart.points.find((point) => point.id === hoveredActionPointId) ?? null;
   const riskBadgeVariant =
     eventPerformance?.riskFlag === "On Track"
       ? "secondary"
@@ -5087,6 +5158,7 @@ function EventReportingDashboard({
                     className="h-[220px] w-full"
                     role="img"
                     aria-label="Current versus expected revenue projections"
+                    onMouseLeave={() => setHoveredActionPointId(null)}
                   >
                     {actionProjectionChart.yTicks.map((tick) => {
                       const y =
@@ -5109,7 +5181,7 @@ function EventReportingDashboard({
                             x={36}
                             y={y + 4}
                             textAnchor="end"
-                            fontSize={11}
+                            fontSize={9}
                             fill="hsl(var(--muted-foreground))"
                           >
                             {`$${formatCompactNumber(tick)}`}
@@ -5129,21 +5201,64 @@ function EventReportingDashboard({
                       stroke="hsl(var(--success))"
                       strokeWidth={3}
                     />
-                    {actionProjectionChart.points.map((point) => (
-                      <g key={`action-point-${point.id}`}>
-                        <circle cx={point.x} cy={point.actualY} r={3.3} fill="hsl(var(--primary))" />
-                        <circle cx={point.x} cy={point.expectedY} r={3.3} fill="hsl(var(--success))" />
-                        <text
-                          x={point.x}
-                          y={actionProjectionChart.baseY + 16}
-                          textAnchor="middle"
-                          fontSize={11}
-                          fill="hsl(var(--muted-foreground))"
-                        >
-                          {point.label}
-                        </text>
-                      </g>
-                    ))}
+                    {actionProjectionChart.points.map((point) => {
+                      const isHovered = hoveredActionPointId === point.id;
+                      return (
+                        <g key={`action-point-${point.id}`}>
+                          <circle
+                            cx={point.x}
+                            cy={point.actualY}
+                            r={isHovered ? 5 : 3.3}
+                            fill="hsl(var(--primary))"
+                            stroke={isHovered ? "hsl(var(--card))" : "none"}
+                            strokeWidth={isHovered ? 2 : 0}
+                            onMouseEnter={() => setHoveredActionPointId(point.id)}
+                            onFocus={() => setHoveredActionPointId(point.id)}
+                            onBlur={() => setHoveredActionPointId(null)}
+                            tabIndex={0}
+                          />
+                          <circle
+                            cx={point.x}
+                            cy={point.expectedY}
+                            r={isHovered ? 5 : 3.3}
+                            fill="hsl(var(--success))"
+                            stroke={isHovered ? "hsl(var(--card))" : "none"}
+                            strokeWidth={isHovered ? 2 : 0}
+                            onMouseEnter={() => setHoveredActionPointId(point.id)}
+                            onFocus={() => setHoveredActionPointId(point.id)}
+                            onBlur={() => setHoveredActionPointId(null)}
+                            tabIndex={0}
+                          />
+                          <text
+                            x={point.x}
+                            y={actionProjectionChart.baseY + 16}
+                            textAnchor="middle"
+                            fontSize={9}
+                            fill="hsl(var(--muted-foreground))"
+                          >
+                            {point.label}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    {hoveredActionPoint && (
+                      <SvgPointTooltip
+                        x={hoveredActionPoint.x}
+                        y={Math.min(hoveredActionPoint.actualY, hoveredActionPoint.expectedY)}
+                        width={actionProjectionChart.width}
+                        height={actionProjectionChart.height}
+                        left={actionProjectionChart.left}
+                        right={actionProjectionChart.right}
+                        top={actionProjectionChart.top}
+                        bottom={actionProjectionChart.bottom}
+                        title={`Period: ${hoveredActionPoint.label}`}
+                        lines={[
+                          `Current Revenue: ${formatCurrency(Math.round(hoveredActionPoint.actual))}`,
+                          `Expected Revenue: ${formatCurrency(Math.round(hoveredActionPoint.expected))}`,
+                          `Delta: ${hoveredActionPoint.expected - hoveredActionPoint.actual >= 0 ? "+" : ""}${formatCurrency(Math.round(hoveredActionPoint.expected - hoveredActionPoint.actual))}`,
+                        ]}
+                      />
+                    )}
                   </svg>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
@@ -5309,7 +5424,7 @@ function EventReportingDashboard({
                             x={36}
                             y={y + 4}
                             textAnchor="end"
-                            fontSize={11}
+                            fontSize={9}
                             fill="hsl(var(--muted-foreground))"
                           >
                             {activePerformanceMetricConfig.formatAxis(tick)}
@@ -5351,7 +5466,7 @@ function EventReportingDashboard({
                             x={point.x}
                             y={activePerformanceTrendChart.baseY + 16}
                             textAnchor="middle"
-                            fontSize={11}
+                            fontSize={9}
                             fill="hsl(var(--muted-foreground))"
                           >
                             {point.label}
@@ -8265,7 +8380,28 @@ export default function App() {
                           {event.netTicketRevenue === null ? (
                             "--"
                           ) : (
-                            <div className="group relative inline-flex">
+                            <HoverOverlay
+                              className="inline-flex"
+                              align="center"
+                              contentClassName="w-[220px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Net Ticket Revenue
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Group Sales</span>
+                                      <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.groupSales)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Consumer</span>
+                                      <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.consumer)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
                               <span
                                 tabIndex={0}
                                 className={cn(
@@ -8277,22 +8413,7 @@ export default function App() {
                               >
                                 {formatCurrency(event.netTicketRevenue)}
                               </span>
-                              <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-1.5 w-[220px] -translate-x-1/2 rounded-lg border border-border/80 bg-card p-3 text-left shadow-xl opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
-                                <p className="mb-2 text-xs font-semibold text-foreground">
-                                  Net Ticket Revenue
-                                </p>
-                                <ul className="space-y-1.5">
-                                  <li className="flex items-center justify-between gap-3 text-xs">
-                                    <span className="font-medium text-foreground">Group Sales</span>
-                                    <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.groupSales)}</span>
-                                  </li>
-                                  <li className="flex items-center justify-between gap-3 text-xs">
-                                    <span className="font-medium text-foreground">Consumer</span>
-                                    <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.consumer)}</span>
-                                  </li>
-                                </ul>
-                              </div>
-                            </div>
+                            </HoverOverlay>
                           )}
                         </TableCell>
                         <TableCell className="text-center px-5">
