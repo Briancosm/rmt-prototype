@@ -2115,37 +2115,73 @@ const confidenceTierDotStyles: Record<ConfidenceTier, string> = {
   low: "bg-destructive",
 };
 
+const HEALTH_RING_RADIUS = 16;
+const HEALTH_RING_CIRCUMFERENCE = 2 * Math.PI * HEALTH_RING_RADIUS;
+
 function EventHealthBadge({ score, event }: { score: number | null; event?: EventRecord }) {
   if (score === null) return <span className="text-muted-foreground text-sm">--</span>;
-  const { bg, text, ring } =
+  const arcColor =
     score >= 76
-      ? { bg: "bg-success/10", text: "text-success", ring: "ring-1 ring-success/30" }
+      ? "hsl(var(--success))"
       : score >= 51
-      ? { bg: "bg-primary/10", text: "text-primary", ring: "ring-1 ring-primary/30" }
-      : score >= 26
-      ? { bg: "bg-warning/10", text: "text-warning", ring: "ring-1 ring-warning/30" }
-      : { bg: "bg-destructive/10", text: "text-destructive", ring: "ring-1 ring-destructive/30" };
+        ? "hsl(var(--primary))"
+        : score >= 26
+          ? "hsl(var(--warning))"
+          : "hsl(var(--destructive))";
+  const arcLength = (clamp(score, 0, 100) / 100) * HEALTH_RING_CIRCUMFERENCE;
 
-  const isUnderperforming = event?.attention === "underperforming";
-  const reasons = isUnderperforming ? getAttentionReasons(event!) : [];
-  const summary = isUnderperforming ? getAttentionSummary(event!) : "";
-
-  if (!isUnderperforming) {
-    return (
-      <div
-        className={cn(
-          "inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-normal",
-          bg, text, ring,
-        )}
+  const ring = (
+    <svg
+      width="34"
+      height="34"
+      viewBox="0 0 40 40"
+      role="img"
+      aria-label={`Event health ${score} of 100`}
+    >
+      <circle
+        cx="20"
+        cy="20"
+        r={HEALTH_RING_RADIUS}
+        fill="none"
+        stroke="hsl(var(--border))"
+        strokeWidth="3.5"
+        opacity="0.7"
+      />
+      <circle
+        cx="20"
+        cy="20"
+        r={HEALTH_RING_RADIUS}
+        fill="none"
+        stroke={arcColor}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeDasharray={`${arcLength.toFixed(1)} ${HEALTH_RING_CIRCUMFERENCE.toFixed(1)}`}
+        transform="rotate(-90 20 20)"
+      />
+      <text
+        x="20"
+        y="24"
+        textAnchor="middle"
+        fontSize="12"
+        fontWeight={500}
+        fill="hsl(var(--foreground))"
       >
         {score}
-      </div>
-    );
+      </text>
+    </svg>
+  );
+
+  const isUnderperforming = event?.attention === "underperforming";
+  if (!isUnderperforming) {
+    return <span className="inline-flex">{ring}</span>;
   }
+
+  const reasons = getAttentionReasons(event!);
+  const summary = getAttentionSummary(event!);
 
   return (
     <HoverOverlay
-      className="inline-block"
+      className="inline-block cursor-help"
       align="center"
       contentClassName="w-[320px] p-3"
       content={
@@ -2168,15 +2204,7 @@ function EventHealthBadge({ score, event }: { score: number | null; event?: Even
         </>
       }
     >
-      <div
-        className={cn(
-          "inline-flex h-8 w-8 cursor-help items-center justify-center rounded-full text-xs font-normal ring-2 ring-offset-1",
-          bg, text,
-          "ring-destructive/70",
-        )}
-      >
-        {score}
-      </div>
+      {ring}
     </HoverOverlay>
   );
 }
