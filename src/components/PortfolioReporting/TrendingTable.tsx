@@ -233,7 +233,10 @@ function TrendChart({ series }: { series: SeriesConfig }) {
   const lastX = actualCoords[actualCoords.length - 1].x.toFixed(1);
   const areaPath = `${actualPath} L ${lastX} ${baseY.toFixed(1)} L ${firstX} ${baseY.toFixed(1)} Z`;
 
+  const hoveredPoint = hoveredIndex !== null ? actualCoords[hoveredIndex] : null;
+
   return (
+    <div className="relative">
     <svg
       viewBox={`0 0 ${PLOT_W} ${PLOT_H}`}
       width="100%"
@@ -254,7 +257,7 @@ function TrendChart({ series }: { series: SeriesConfig }) {
             <text
               x={plot.left - 4} y={y}
               textAnchor="end" dominantBaseline="middle"
-              fontSize="8" fill="currentColor" className="text-muted-foreground"
+              fontSize="6.5" fill="currentColor" className="text-muted-foreground"
             >
               {series.fmtY(tick)}
             </text>
@@ -301,7 +304,7 @@ function TrendChart({ series }: { series: SeriesConfig }) {
           x={scaleX(i, n, plot).toFixed(1)}
           y={PLOT_H - 5}
           textAnchor="middle"
-          fontSize="8"
+          fontSize="6.5"
           fill="currentColor"
           className="text-muted-foreground"
         >
@@ -309,56 +312,40 @@ function TrendChart({ series }: { series: SeriesConfig }) {
         </text>
       ))}
 
-      {hoveredIndex !== null && (() => {
-        const point = actualCoords[hoveredIndex];
+    </svg>
+      {hoveredIndex !== null && hoveredPoint && (() => {
         const actualValue = series.actualSeries[hoveredIndex];
         const expectedValue = series.expectedSeries[hoveredIndex];
         const delta = actualValue - expectedValue;
-        const lines = [
-          `${series.actualLabel}: ${series.fmtKpi(actualValue)}`,
-          `${series.expectedLabel}: ${series.fmtKpi(expectedValue)}`,
-          `${series.deltaLabel}: ${delta >= 0 ? "+" : ""}${series.fmtKpi(delta)}`,
-        ];
         const label = X_LABELS[hoveredIndex];
-        const title = label === "Now" ? "Timeline: Now" : `Timeline: ${label} ago`;
-        const tooltipWidth = 185;
-        const lineHeight = 13;
-        const tooltipHeight = 24 + lines.length * lineHeight;
-        const placeAbove = point.y - tooltipHeight - 9 >= plot.top;
-        const tooltipX = Math.min(
-          Math.max(point.x - tooltipWidth / 2, plot.left + 2),
-          PLOT_W - plot.right - tooltipWidth - 2,
-        );
-        const tooltipY = placeAbove
-          ? point.y - tooltipHeight - 9
-          : Math.min(point.y + 9, PLOT_H - plot.bottom - tooltipHeight - 2);
+        const placeBelow = hoveredPoint.y / PLOT_H < 0.42;
         return (
-          <g transform={`translate(${tooltipX.toFixed(1)},${tooltipY.toFixed(1)})`} pointerEvents="none">
-            <rect
-              width={tooltipWidth}
-              height={tooltipHeight}
-              rx={6}
-              fill="hsl(var(--card))"
-              stroke="hsl(var(--border))"
-            />
-            <text x={10} y={14} fontSize="10" fontWeight={600} fill="hsl(var(--foreground))">
-              {title}
-            </text>
-            {lines.map((line, index) => (
-              <text
-                key={line}
-                x={10}
-                y={29 + index * lineHeight}
-                fontSize="10"
-                fill="hsl(var(--muted-foreground))"
-              >
-                {line}
-              </text>
-            ))}
-          </g>
+          <div
+            className="pointer-events-none absolute z-10 whitespace-nowrap rounded-md border border-border/80 bg-card px-2.5 py-1.5 shadow-lg"
+            style={{
+              left: `${(hoveredPoint.x / PLOT_W) * 100}%`,
+              top: `${(hoveredPoint.y / PLOT_H) * 100}%`,
+              transform: placeBelow
+                ? "translate(-50%, 10px)"
+                : "translate(-50%, calc(-100% - 10px))",
+            }}
+          >
+            <p className="text-[11px] font-semibold text-foreground">
+              {label === "Now" ? "Timeline: Now" : `Timeline: ${label} ago`}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {series.actualLabel}: {series.fmtKpi(actualValue)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {series.expectedLabel}: {series.fmtKpi(expectedValue)}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {series.deltaLabel}: {delta >= 0 ? "+" : ""}{series.fmtKpi(delta)}
+            </p>
+          </div>
         );
       })()}
-    </svg>
+    </div>
   );
 }
 
