@@ -62,6 +62,9 @@ function trendSeries(finalValue: number, seed: number, n = 9, spread = 0.12): nu
 // ---------------------------------------------------------------------------
 
 interface SeriesConfig {
+  id: MetricTab;
+  /** Accent color for the "actual" line, unique per metric tab. */
+  accent: string;
   title: string;
   description: string;
   actualLabel: string;
@@ -105,6 +108,7 @@ function buildSeries(
     const delta = actual - expected;
     const sign = delta >= 0 ? "+" : "";
     return {
+      id: "revenue" as const, accent: "#059669",
       title: "Revenue", description: "Net revenue accumulation against expected pace.",
       actualLabel: "Actual Revenue", expectedLabel: "Expected Revenue", deltaLabel: "Variance",
       actualSeries: cumulativeSeries(actual, seed),
@@ -128,6 +132,7 @@ function buildSeries(
     const deltaPct = expected ? Math.round((delta / expected) * 100) : 0;
     const fmtK = (v: number) => v >= 1_000 ? `${(v / 1_000).toFixed(0)}K` : String(Math.round(v));
     return {
+      id: "funnel-entries" as const, accent: "#2563eb",
       title: "Funnel Entries", description: "Cumulative top-of-funnel sessions across all events.",
       actualLabel: "Actual Entries", expectedLabel: "Expected Entries", deltaLabel: "Δ vs Expected",
       actualSeries: cumulativeSeries(actual, seed),
@@ -150,6 +155,7 @@ function buildSeries(
     const delta = avgFcr - expectedFcr;
     const deltaPct = expectedFcr ? Math.round((delta / expectedFcr) * 100) : 0;
     return {
+      id: "funnel-completion" as const, accent: "#7c3aed",
       title: "Funnel Completion", description: "Average funnel completion rate (FCR) trend across events.",
       actualLabel: "Actual FCR %", expectedLabel: "Expected FCR %", deltaLabel: "Δ vs Expected",
       actualSeries: trendSeries(avgFcr, seed, 9, 0.14),
@@ -171,6 +177,7 @@ function buildSeries(
     const delta = avgSold - avgProjected;
     const deltaPct = avgProjected ? Math.round((delta / avgProjected) * 100) : 0;
     return {
+      id: "sold" as const, accent: "#0d9488",
       title: "%", description: "Average sell-through progression vs. projected across all events.",
       actualLabel: "Actual %", expectedLabel: "Projected", deltaLabel: "Δ vs Projected",
       actualSeries: trendSeries(avgSold, seed, 9, 0.09),
@@ -190,6 +197,7 @@ function buildSeries(
   const target = 5.0;
   const delta = avgRoas - target;
   return {
+    id: "roas" as const, accent: "#db2777",
     title: "ROAS", description: "Portfolio-wide return on ad spend vs. 5.0× performance target.",
     actualLabel: "Actual ROAS", expectedLabel: "5.0× Target", deltaLabel: "Δ vs Target",
     actualSeries: trendSeries(avgRoas, seed, 9, 0.11),
@@ -265,7 +273,14 @@ function TrendChart({ series }: { series: SeriesConfig }) {
         );
       })}
 
-      <path d={areaPath} fill="var(--color-success, #22c55e)" fillOpacity="0.08" />
+      <defs>
+        <linearGradient id={`trend-fill-${series.id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={series.accent} stopOpacity="0.26" />
+          <stop offset="100%" stopColor={series.accent} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      <path d={areaPath} fill={`url(#trend-fill-${series.id})`} />
 
       <path
         d={expectedPath}
@@ -278,7 +293,7 @@ function TrendChart({ series }: { series: SeriesConfig }) {
       <path
         d={actualPath}
         fill="none"
-        stroke="var(--color-success, #22c55e)"
+        stroke={series.accent}
         strokeWidth="1.1"
       />
 
@@ -287,7 +302,7 @@ function TrendChart({ series }: { series: SeriesConfig }) {
           key={i}
           cx={c.x.toFixed(1)} cy={c.y.toFixed(1)}
           r={hoveredIndex === i ? 4 : i === actualCoords.length - 1 ? 3 : 2.2}
-          fill="var(--color-success, #22c55e)"
+          fill={series.accent}
           stroke={hoveredIndex === i ? "hsl(var(--card))" : "none"}
           strokeWidth={hoveredIndex === i ? 2 : 0}
           style={{ cursor: "pointer" }}
@@ -442,8 +457,8 @@ export function TrendingTable({ events, roasRows }: TrendingTableProps) {
       <div className="flex items-center gap-5 border-t px-4 py-2.5 sm:px-6">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <svg width="20" height="10" viewBox="0 0 20 10">
-            <line x1="0" y1="5" x2="20" y2="5" stroke="var(--color-success, #22c55e)" strokeWidth="1.5" />
-            <circle cx="10" cy="5" r="2.5" fill="var(--color-success, #22c55e)" />
+            <line x1="0" y1="5" x2="20" y2="5" stroke={series.accent} strokeWidth="1.5" />
+            <circle cx="10" cy="5" r="2.5" fill={series.accent} />
           </svg>
           {series.actualLabel}
         </span>
