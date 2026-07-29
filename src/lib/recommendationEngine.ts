@@ -133,19 +133,17 @@ export const recommendationObjectiveLabels: Record<RecommendationObjective, stri
   sellThrough: "Sell-through",
 };
 
-// Sales-pace-only adjustment: lagging seat groups need a steeper discount to
-// clear remaining inventory before the event; hot ones can hold or nudge up.
-function sellThroughAdjustmentPct(soldPct: number): number {
-  if (soldPct >= 80) return 4;
-  if (soldPct >= 60) return 0;
-  if (soldPct >= 40) return -7;
-  if (soldPct >= 20) return -14;
-  return -20;
-}
-
-export function sellThroughRecommendedPrice(currentPrice: number, soldPct: number): number {
-  const adjustment = sellThroughAdjustmentPct(soldPct);
-  return round(Math.max(1, currentPrice * (1 + adjustment / 100)), 2);
+// A deterministic, seeded price point for the sell-through objective — the
+// same shape as `recTicketPrice` (the revenue recommendation): it can land
+// above or below current price, it isn't a one-directional discount formula.
+export function sellThroughRecommendedPrice(
+  eventId: string,
+  seatGroupId: string,
+  currentPrice: number,
+): number {
+  const rng = createRng(`${eventId}:${seatGroupId}:sellThrough`);
+  const pctMove = (rng() - 0.5) * 0.36; // symmetric ±18% move off current price
+  return round(Math.max(1, currentPrice * (1 + pctMove)), 2);
 }
 
 function buildDrivers(
