@@ -50,8 +50,11 @@ import {
   buildSeatGroupRecommendation,
   confidenceTierFor,
   confidenceTierLabels,
+  recommendationObjectiveLabels,
+  sellThroughRecommendedPrice,
   summarizeRecommendations,
   type ConfidenceTier,
+  type RecommendationObjective,
   type SeatGroupRecommendation,
 } from "@/lib/recommendationEngine";
 import { ConfidenceBadge } from "@/components/PricingRecommendations/ConfidenceBadge";
@@ -2114,6 +2117,47 @@ const confidenceTierDotStyles: Record<ConfidenceTier, string> = {
   medium: "bg-warning",
   low: "bg-destructive",
 };
+
+const recommendationObjectiveShortLabels: Record<RecommendationObjective, string> = {
+  revenue: "Rev",
+  sellThrough: "S/T",
+};
+
+function RecommendationObjectiveToggle({
+  value,
+  onChange,
+}: {
+  value: RecommendationObjective;
+  onChange: (next: RecommendationObjective) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Recommendation objective"
+      className="inline-flex items-center rounded-full border border-border/60 bg-background p-0.5"
+    >
+      {(["revenue", "sellThrough"] as const).map((objective) => (
+        <button
+          key={objective}
+          type="button"
+          role="radio"
+          aria-checked={value === objective}
+          onClick={() => onChange(objective)}
+          className={cn(
+            "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+            value === objective
+              ? objective === "revenue"
+                ? "bg-primary text-primary-foreground"
+                : "bg-success text-success-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {recommendationObjectiveLabels[objective]}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const HEALTH_RING_RADIUS = 16;
 const HEALTH_RING_CIRCUMFERENCE = 2 * Math.PI * HEALTH_RING_RADIUS;
@@ -5787,6 +5831,12 @@ export default function App() {
   const [showRecommendedReviewModal, setShowRecommendedReviewModal] = useState(false);
   const [recommendedReviewValuesById, setRecommendedReviewValuesById] = useState<Record<string, string>>({});
   const [draftSeatRecommendationUndoById, setDraftSeatRecommendationUndoById] = useState<Record<string, number>>({});
+  const [stagedRecommendationObjectiveById, setStagedRecommendationObjectiveById] = useState<Record<string, RecommendationObjective>>({});
+  const [recommendationObjectiveByEventId, setRecommendationObjectiveByEventId] = useState<Record<string, RecommendationObjective>>({});
+  const getRecommendationObjective = (eventId: string): RecommendationObjective =>
+    recommendationObjectiveByEventId[eventId] ?? "revenue";
+  const setRecommendationObjective = (eventId: string, objective: RecommendationObjective) =>
+    setRecommendationObjectiveByEventId((current) => ({ ...current, [eventId]: objective }));
   const [recommendationDetailTarget, setRecommendationDetailTarget] = useState<{
     eventId: string;
     seatGroupId: string;
@@ -6134,12 +6184,22 @@ export default function App() {
       selectedEventIds.length > 0 ? selectedEventIds : draftEvents.map((e) => e.id);
     return draftEvents
       .filter((e) => scopeEventIds.includes(e.id))
-      .flatMap((event) =>
-        event.seatGroups
-          .filter((sg) => !arePriceValuesEqual(sg.recTicketPrice, sg.currentPrice))
-          .map((sg) => ({ eventId: event.id, seatGroupId: sg.id, currentPrice: sg.currentPrice, recPrice: sg.recTicketPrice })),
-      );
-  }, [draftEvents, selectedEventIds]);
+      .flatMap((event) => {
+        const objective = getRecommendationObjective(event.id);
+        return event.seatGroups
+          .map((sg) => ({
+            eventId: event.id,
+            seatGroupId: sg.id,
+            currentPrice: sg.currentPrice,
+            recPrice:
+              objective === "revenue"
+                ? sg.recTicketPrice
+                : sellThroughRecommendedPrice(sg.currentPrice, sg.soldPct),
+            objective,
+          }))
+          .filter((rec) => !arePriceValuesEqual(rec.recPrice, rec.currentPrice));
+      });
+  }, [draftEvents, selectedEventIds, recommendationObjectiveByEventId]);
 
   const filterTabCounts = useMemo(
     () => ({
@@ -6184,6 +6244,13 @@ export default function App() {
       const next = { ...current };
       for (const rec of scopedRecommendations) {
         next[`${rec.eventId}:${rec.seatGroupId}`] = rec.currentPrice;
+      }
+      return next;
+    });
+    setStagedRecommendationObjectiveById((current) => {
+      const next = { ...current };
+      for (const rec of scopedRecommendations) {
+        next[`${rec.eventId}:${rec.seatGroupId}`] = rec.objective;
       }
       return next;
     });
@@ -6566,6 +6633,7 @@ export default function App() {
     seatGroupId: string,
     currentPrice: number,
     recommendedPrice: number,
+    objective: RecommendationObjective,
   ) => {
     if (arePriceValuesEqual(currentPrice, recommendedPrice)) {
       return;
@@ -6577,6 +6645,10 @@ export default function App() {
     setDraftSeatRecommendationUndoById((current) => ({
       ...current,
       [recommendationKey]: currentPrice,
+    }));
+    setStagedRecommendationObjectiveById((current) => ({
+      ...current,
+      [recommendationKey]: objective,
     }));
     setDraftEvents((current) =>
       current.map((event) =>
@@ -6622,6 +6694,10 @@ export default function App() {
       ),
     );
     setDraftSeatRecommendationUndoById((current) => {
+      const { [recommendationKey]: _removed, ...rest } = current;
+      return rest;
+    });
+    setStagedRecommendationObjectiveById((current) => {
       const { [recommendationKey]: _removed, ...rest } = current;
       return rest;
     });
@@ -7057,6 +7133,7 @@ export default function App() {
                   recommendationDetail.seatGroup.id,
                   recommendationDetail.seatGroup.currentPrice,
                   recommendationDetail.seatGroup.recTicketPrice,
+                  "revenue",
                 );
               }
               setRecommendationDetailTarget(null);
@@ -7772,6 +7849,7 @@ export default function App() {
                 recommendationDetail.seatGroup.id,
                 recommendationDetail.seatGroup.currentPrice,
                 recommendationDetail.seatGroup.recTicketPrice,
+                "revenue",
               );
             }
             setRecommendationDetailTarget(null);
@@ -8551,6 +8629,15 @@ export default function App() {
                                       </div>
                                     )}
                                     </div>
+                                    <div className="ml-auto flex items-center gap-2">
+                                      <span className="text-[11px] font-medium text-muted-foreground">
+                                        Optimize for
+                                      </span>
+                                      <RecommendationObjectiveToggle
+                                        value={getRecommendationObjective(event.id)}
+                                        onChange={(next) => setRecommendationObjective(event.id, next)}
+                                      />
+                                    </div>
                                   </div>
                                   </div>
                                   <Table className="table-fixed" wrapperClassName="overflow-visible">
@@ -8572,7 +8659,7 @@ export default function App() {
                                         </TableHead>
                                         <TableHead className="w-[120px] whitespace-nowrap">Seat Group</TableHead>
                                         <TableHead className="w-[100px] whitespace-nowrap">Original Price</TableHead>
-                                        <TableHead className="w-[200px] whitespace-nowrap">Current Price</TableHead>
+                                        <TableHead className="w-[280px] whitespace-nowrap">Current Price</TableHead>
                                         <TableHead className="w-[100px] whitespace-nowrap text-center">%</TableHead>
                                         <TableHead className="w-[110px] whitespace-nowrap">Sold / Avail. Inv</TableHead>
                                         <TableHead className="w-[110px] whitespace-nowrap">Proj. Revenue</TableHead>
@@ -8585,19 +8672,30 @@ export default function App() {
                                         const publishedSeatGroup = publishedEvent?.seatGroups.find(
                                           (item) => item.id === seatGroup.id,
                                         );
-                                        const isSeatRecommendationDifferent = !arePriceValuesEqual(
-                                          seatGroup.recTicketPrice,
-                                          seatGroup.currentPrice,
-                                        );
                                         const seatRecommendationKey = `${event.id}:${seatGroup.id}`;
+                                        const recommendationObjective = getRecommendationObjective(event.id);
+                                        const revenueRecPrice = seatGroup.recTicketPrice;
+                                        const sellThroughRecPrice = sellThroughRecommendedPrice(
+                                          seatGroup.currentPrice,
+                                          seatGroup.soldPct,
+                                        );
+                                        const activeRecPrice =
+                                          recommendationObjective === "revenue" ? revenueRecPrice : sellThroughRecPrice;
+                                        const otherRecPrice =
+                                          recommendationObjective === "revenue" ? sellThroughRecPrice : revenueRecPrice;
+                                        const otherObjective: RecommendationObjective =
+                                          recommendationObjective === "revenue" ? "sellThrough" : "revenue";
+                                        const isActiveRecDifferent = !arePriceValuesEqual(activeRecPrice, seatGroup.currentPrice);
+                                        const isOtherRecDifferent = !arePriceValuesEqual(otherRecPrice, seatGroup.currentPrice);
+                                        const isSeatRecommendationDifferent = isActiveRecDifferent || isOtherRecDifferent;
                                         const seatGroupRecommendation =
                                           seatGroupRecommendationsByKey.get(seatRecommendationKey);
+                                        const stagedObjective =
+                                          stagedRecommendationObjectiveById[seatRecommendationKey] ?? "revenue";
                                         const isSeatRecommendationUndo =
                                           draftSeatRecommendationUndoById[seatRecommendationKey] !== undefined &&
-                                          arePriceValuesEqual(
-                                            seatGroup.recTicketPrice,
-                                            seatGroup.currentPrice,
-                                          );
+                                          (arePriceValuesEqual(seatGroup.currentPrice, revenueRecPrice) ||
+                                            arePriceValuesEqual(seatGroup.currentPrice, sellThroughRecPrice));
                                         const isSeatNameDirty =
                                           seatGroup.name !== (publishedSeatGroup?.name ?? seatGroup.name);
                                         const isSeatPriceDirty =
@@ -8712,10 +8810,20 @@ export default function App() {
                                               {isSeatRecommendationUndo ? (
                                                 <>
                                                   <span aria-hidden className="text-muted-foreground/50">→</span>
-                                                  <span className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/25 bg-primary/5 px-2.5 text-[11px] font-medium text-primary">
+                                                  <span
+                                                    className={cn(
+                                                      "inline-flex h-6 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium",
+                                                      stagedObjective === "revenue"
+                                                        ? "border-primary/25 bg-primary/5 text-primary"
+                                                        : "border-success/25 bg-success/5 text-success",
+                                                    )}
+                                                  >
                                                     <Check className="h-3 w-3" />
+                                                    <span className="text-[9px] font-bold uppercase tracking-wide opacity-70">
+                                                      {recommendationObjectiveShortLabels[stagedObjective]}
+                                                    </span>
                                                     <span className="tabular-nums">
-                                                      {formatCurrency(seatGroup.recTicketPrice)}
+                                                      {formatCurrency(seatGroup.currentPrice)}
                                                     </span>
                                                     Staged
                                                   </span>
@@ -8733,25 +8841,60 @@ export default function App() {
                                               ) : isSeatRecommendationDifferent ? (
                                                 <>
                                                   <span aria-hidden className="text-muted-foreground/50">→</span>
-                                                  <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                      applyDraftSeatGroupRecommendation(
-                                                        event.id,
-                                                        seatGroup.id,
-                                                        seatGroup.currentPrice,
-                                                        seatGroup.recTicketPrice,
-                                                      )
-                                                    }
-                                                    className="inline-flex h-6 items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/20"
-                                                    title="Accept recommended price"
-                                                    aria-label={`Accept recommended price of ${formatCurrency(seatGroup.recTicketPrice)} for ${seatGroup.name}`}
-                                                  >
-                                                    <span className="tabular-nums">
-                                                      {formatCurrency(seatGroup.recTicketPrice)}
-                                                    </span>
-                                                    <Plus className="h-3 w-3" />
-                                                  </button>
+                                                  {isActiveRecDifferent && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        applyDraftSeatGroupRecommendation(
+                                                          event.id,
+                                                          seatGroup.id,
+                                                          seatGroup.currentPrice,
+                                                          activeRecPrice,
+                                                          recommendationObjective,
+                                                        )
+                                                      }
+                                                      className={cn(
+                                                        "inline-flex h-6 items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold transition-colors",
+                                                        recommendationObjective === "revenue"
+                                                          ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                                                          : "border-success/40 bg-success/10 text-success hover:bg-success/20",
+                                                      )}
+                                                      title={`Accept ${recommendationObjectiveLabels[recommendationObjective]}-optimized price`}
+                                                      aria-label={`Accept ${recommendationObjectiveLabels[recommendationObjective]}-optimized price of ${formatCurrency(activeRecPrice)} for ${seatGroup.name}`}
+                                                    >
+                                                      <span className="text-[9px] font-bold uppercase tracking-wide opacity-70">
+                                                        {recommendationObjectiveShortLabels[recommendationObjective]}
+                                                      </span>
+                                                      <span className="tabular-nums">
+                                                        {formatCurrency(activeRecPrice)}
+                                                      </span>
+                                                      <Plus className="h-3 w-3" />
+                                                    </button>
+                                                  )}
+                                                  {isOtherRecDifferent && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        applyDraftSeatGroupRecommendation(
+                                                          event.id,
+                                                          seatGroup.id,
+                                                          seatGroup.currentPrice,
+                                                          otherRecPrice,
+                                                          otherObjective,
+                                                        )
+                                                      }
+                                                      className="inline-flex items-center gap-1 rounded px-1 text-[10px] font-medium text-muted-foreground/70 transition-colors hover:text-foreground hover:underline underline-offset-2"
+                                                      title={`Accept ${recommendationObjectiveLabels[otherObjective]}-optimized price`}
+                                                      aria-label={`Accept ${recommendationObjectiveLabels[otherObjective]}-optimized price of ${formatCurrency(otherRecPrice)} for ${seatGroup.name}`}
+                                                    >
+                                                      <span className="uppercase tracking-wide">
+                                                        {recommendationObjectiveShortLabels[otherObjective]}
+                                                      </span>
+                                                      <span className="tabular-nums">
+                                                        {formatCurrency(otherRecPrice)}
+                                                      </span>
+                                                    </button>
+                                                  )}
                                                 </>
                                               ) : null}
                                               {SHOW_RECOMMENDATION_INSIGHTS &&

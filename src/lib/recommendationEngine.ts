@@ -119,6 +119,35 @@ export const confidenceTierLabels: Record<ConfidenceTier, string> = {
   low: "Low",
 };
 
+/**
+ * Two pricing objectives the portfolio can optimize toward. Revenue pricing
+ * comes from `buildSeatGroupRecommendation` above; sell-through pricing comes
+ * from `sellThroughRecommendedPrice` below. They're intentionally driven by
+ * different signals so they diverge the way two competing production models
+ * would, rather than being one model with a fudge factor.
+ */
+export type RecommendationObjective = "revenue" | "sellThrough";
+
+export const recommendationObjectiveLabels: Record<RecommendationObjective, string> = {
+  revenue: "Revenue",
+  sellThrough: "Sell-through",
+};
+
+// Sales-pace-only adjustment: lagging seat groups need a steeper discount to
+// clear remaining inventory before the event; hot ones can hold or nudge up.
+function sellThroughAdjustmentPct(soldPct: number): number {
+  if (soldPct >= 80) return 4;
+  if (soldPct >= 60) return 0;
+  if (soldPct >= 40) return -7;
+  if (soldPct >= 20) return -14;
+  return -20;
+}
+
+export function sellThroughRecommendedPrice(currentPrice: number, soldPct: number): number {
+  const adjustment = sellThroughAdjustmentPct(soldPct);
+  return round(Math.max(1, currentPrice * (1 + adjustment / 100)), 2);
+}
+
 function buildDrivers(
   rng: () => number,
   input: RecommendationInput,
