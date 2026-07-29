@@ -6194,7 +6194,7 @@ export default function App() {
             recPrice:
               objective === "revenue"
                 ? sg.recTicketPrice
-                : sellThroughRecommendedPrice(event.id, sg.id, sg.currentPrice),
+                : sellThroughRecommendedPrice(event.id, sg.id, sg.originalPrice),
             objective,
           }))
           .filter((rec) => !arePriceValuesEqual(rec.recPrice, rec.currentPrice));
@@ -8678,7 +8678,7 @@ export default function App() {
                                         const sellThroughRecPrice = sellThroughRecommendedPrice(
                                           event.id,
                                           seatGroup.id,
-                                          seatGroup.currentPrice,
+                                          seatGroup.originalPrice,
                                         );
                                         const activeRecPrice =
                                           recommendationObjective === "revenue" ? revenueRecPrice : sellThroughRecPrice;

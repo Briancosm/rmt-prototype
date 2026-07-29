@@ -133,17 +133,18 @@ export const recommendationObjectiveLabels: Record<RecommendationObjective, stri
   sellThrough: "Sell-through",
 };
 
-// A deterministic, seeded price point for the sell-through objective — the
-// same shape as `recTicketPrice` (the revenue recommendation): it can land
-// above or below current price, it isn't a one-directional discount formula.
+// A fixed, seeded price point for the sell-through objective — the same
+// shape as `recTicketPrice` (the revenue recommendation): a single stable
+// target, anchored to `originalPrice` (never mutated by staging/edits) so it
+// doesn't shift once accepted the way anchoring to currentPrice would.
 export function sellThroughRecommendedPrice(
   eventId: string,
   seatGroupId: string,
-  currentPrice: number,
+  originalPrice: number,
 ): number {
   const rng = createRng(`${eventId}:${seatGroupId}:sellThrough`);
-  const pctMove = (rng() - 0.5) * 0.36; // symmetric ±18% move off current price
-  return round(Math.max(1, currentPrice * (1 + pctMove)), 2);
+  const pctMove = (rng() - 0.5) * 0.36; // symmetric ±18% move off the original price
+  return round(Math.max(1, originalPrice * (1 + pctMove)), 2);
 }
 
 function buildDrivers(
