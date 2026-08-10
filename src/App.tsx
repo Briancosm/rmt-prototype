@@ -62,6 +62,7 @@ type AttentionFlag = "underperforming" | null;
 type FilterValue = "all" | "attention" | "on-sale" | "unpublished";
 type SortKey =
   | "event"
+  | "location"
   | "startTime"
   | "domeAtp"
   | "recAtp"
@@ -1543,6 +1544,7 @@ const statusFilterOptions: { label: string; value: FilterValue }[] = [
 
 const sortLabelMap: Record<SortKey, string> = {
   event: "Event",
+  location: "Location",
   startTime: "Start",
   domeAtp: "Dome ATP",
   recAtp: "Rec. ATP",
@@ -1784,12 +1786,13 @@ function getSeatGroupByName(event: EventRecord, seatGroupName: string): SeatGrou
 function formatSeatGroupPriceRange(
   event: EventRecord,
   field: "currentPrice" | "recTicketPrice",
+  multiplier: number = 1,
 ): string {
   if (event.seatGroups.length === 0) {
     return "--";
   }
 
-  const values = event.seatGroups.map((seatGroup) => seatGroup[field]);
+  const values = event.seatGroups.map((seatGroup) => seatGroup[field] * multiplier);
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
 
@@ -2357,6 +2360,8 @@ function sortValueForKey(row: EventRecord, key: SortKey): number | string | null
   switch (key) {
     case "event":
       return row.event;
+    case "location":
+      return row.venueName;
     case "startTime":
       return row.startTimeValue;
     case "domeAtp":
@@ -2969,6 +2974,97 @@ function WeekdayFilterDropdown({
 }
 
 const PRICE_TIERS = ["S11", "S12", "S13", "S14"];
+
+// The tier each event started with when it was created — assigned once here
+// (round-robin, same distribution the old inline initializer used) and never
+// updated afterward, so the Tier dropdown can always show what an event's
+// price tier changed from.
+const ORIGINAL_PRICE_TIER_BY_EVENT_ID: Record<string, string> = Object.fromEntries(
+  initialEvents.map((e, i) => [e.id, PRICE_TIERS[i % PRICE_TIERS.length]]),
+);
+
+// Flat % adjustment per tier. Prices in the mock data are authored for each
+// event's original tier, so the multiplier is relative to that tier — picking
+// the original tier always nets a 1x multiplier (unchanged prices), and
+// picking any other tier scales prices by the gap between the two tiers.
+const TIER_PRICE_ADJUSTMENT_PCT: Record<string, number> = {
+  S11: -9,
+  S12: -3,
+  S13: 4,
+  S14: 12,
+};
+
+function getTierPriceMultiplier(selectedTier: string, originalTier: string): number {
+  const selectedAdjustment = TIER_PRICE_ADJUSTMENT_PCT[selectedTier] ?? 0;
+  const originalAdjustment = TIER_PRICE_ADJUSTMENT_PCT[originalTier] ?? 0;
+  return 1 + (selectedAdjustment - originalAdjustment) / 100;
+}
+
+const EVENT_SORT_FIELD_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "event", label: "Name" },
+  { key: "location", label: "Location" },
+  { key: "startTime", label: "Date" },
+];
+
+function eventSortFieldLabel(key: SortKey): string {
+  return EVENT_SORT_FIELD_OPTIONS.find((option) => option.key === key)?.label ?? "Name";
+}
+
+function EventSortFieldMenu({
+  value,
+  onChange,
+}: {
+  value: SortKey;
+  onChange: (key: SortKey) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+        aria-label="Choose what to sort the Event column by"
+        title="Choose sort field"
+        className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground/50 transition-colors hover:bg-muted/60 hover:text-foreground"
+      >
+        <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-50 min-w-[140px] rounded-lg border border-border/70 bg-popover py-1 shadow-lg">
+          {EVENT_SORT_FIELD_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(option.key);
+                setOpen(false);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs font-normal text-foreground hover:bg-muted/50"
+            >
+              <Check className={cn("h-3 w-3", value === option.key ? "text-primary opacity-100" : "opacity-0")} />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PriceTierFilterDropdown({
   selected,
@@ -4033,6 +4129,13 @@ function formatCompactDateTime(value: number): string {
 function formatStartDate(value: number): string {
   const d = new Date(value);
   return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+}
+
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatStartMonthDay(value: number): string {
+  const d = new Date(value);
+  return `${MONTH_ABBR[d.getMonth()]} ${d.getDate()}`;
 }
 
 function formatStartTime(value: number): string {
@@ -5746,15 +5849,17 @@ export default function App() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [weekdayFilter, setWeekdayFilter] = useState<string[]>([]);
   const [priceTierFilter, setPriceTierFilter] = useState<string[]>([]);
-  const [eventPriceTiers, setEventPriceTiers] = useState<Record<string, string>>(() => {
-    const tiers = ["S11", "S12", "S13", "S14"];
-    return Object.fromEntries(initialEvents.map((e, i) => [e.id, tiers[i % 4]]));
-  });
+  const [eventPriceTiers, setEventPriceTiers] = useState<Record<string, string>>(
+    () => ({ ...ORIGINAL_PRICE_TIER_BY_EVENT_ID }),
+  );
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set(["evt-001"]));
   const [sortState, setSortState] = useState<{ key: SortKey; direction: "asc" | "desc" }>({
     key: "startTime",
     direction: "asc",
   });
+  // Which field the Event column's sort arrow currently targets — chosen via
+  // EventSortFieldMenu. Defaults to match the table's initial sort (Date).
+  const [eventSortField, setEventSortField] = useState<SortKey>("startTime");
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editingEventValue, setEditingEventValue] = useState<string>("");
   const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
@@ -6234,6 +6339,11 @@ export default function App() {
 
       return { key, direction: "asc" };
     });
+  };
+
+  const selectEventSortField = (key: SortKey) => {
+    setEventSortField(key);
+    setSortState({ key, direction: "asc" });
   };
 
   const beginEventPriceEdit = (eventRecord: EventRecord) => {
@@ -8081,10 +8191,9 @@ export default function App() {
           <div className="overflow-auto max-h-[calc(100vh-280px)]">
             <Table className="table-fixed" wrapperClassName="overflow-visible">
               <colgroup>
-                <col style={{width: '340px'}} />
+                <col style={{width: '400px'}} />
                 <col style={{width: '80px'}} />
                 <col style={{width: '80px'}} />
-                <col style={{width: '130px'}} />
                 <col style={{width: '110px'}} />
                 <col style={{width: '140px'}} />
                 <col style={{width: '170px'}} />
@@ -8108,7 +8217,7 @@ export default function App() {
                     className="h-5 border-r border-b border-border/60 bg-secondary/20 p-0 sticky left-0 z-30"
                   />
                   <TableHead
-                    colSpan={2}
+                    colSpan={1}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
@@ -8154,7 +8263,7 @@ export default function App() {
                   </TableHead>
                 </TableRow>
                 <TableRow className="hover:bg-card bg-card">
-                  <TableHead className="w-[340px] whitespace-nowrap sticky left-0 z-30 bg-card">
+                  <TableHead className="w-[400px] whitespace-nowrap sticky left-0 z-30 bg-card">
                     <div className="flex items-center gap-2">
                       <Checkbox
                         checked={visibleEventIds.length > 0 && selectedVisibleEventCount === visibleEventIds.length}
@@ -8167,29 +8276,20 @@ export default function App() {
                       />
                       <button
                         type="button"
-                        onClick={() => onSort("event")}
+                        onClick={() => onSort(eventSortField)}
                         className="group flex items-center gap-1 whitespace-nowrap"
                       >
-                        {sortLabelMap.event}
-                        {sortIconForKey("event")}
+                        Event (sort by {eventSortFieldLabel(eventSortField)})
+                        {sortIconForKey(eventSortField)}
                       </button>
+                      <EventSortFieldMenu value={eventSortField} onChange={selectEventSortField} />
                     </div>
                   </TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[340px] z-30 bg-card">
+                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[400px] z-30 bg-card">
                     Health
                   </TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[420px] z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]">Tier</TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap border-l border-border/70">
-                    <button
-                      type="button"
-                      onClick={() => onSort("startTime")}
-                      className="group flex items-center gap-1 whitespace-nowrap"
-                    >
-                      {sortLabelMap.startTime}
-                      {sortIconForKey("startTime")}
-                    </button>
-                  </TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap">
+                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[480px] z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]">Tier</TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70">
                     Days / Window
                   </TableHead>
                   <TableHead className="w-[140px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
@@ -8239,7 +8339,9 @@ export default function App() {
                   const bulkSeatEditMode = bulkSeatEditModeByEvent[event.id] ?? "set";
                   const isBulkEditOverlayOpen = activeBulkEditEventId === event.id;
                   const dummyPriceTier = eventPriceTiers[event.id] ?? "S11";
-                  const domePriceRange = formatSeatGroupPriceRange(event, "currentPrice");
+                  const originalPriceTier = ORIGINAL_PRICE_TIER_BY_EVENT_ID[event.id];
+                  const tierPriceMultiplier = getTierPriceMultiplier(dummyPriceTier, originalPriceTier);
+                  const domePriceRange = formatSeatGroupPriceRange(event, "currentPrice", tierPriceMultiplier);
                   const domeSellthroughLift = getSellthroughLift(
                     event.soldPct,
                     event.domeProjectedSellthroughPct,
@@ -8305,15 +8407,22 @@ export default function App() {
                             />
 
                             <div className="min-w-0">
-                              <LastChangeHover label={formatLastChange(event.lastPriceChangedAt)}>
-                                <p className="max-w-[540px] whitespace-normal text-xs leading-tight">
+                              <LastChangeHover label={formatLastChange(event.lastPriceChangedAt)} className="block w-full min-w-0">
+                                <p
+                                  title={event.event}
+                                  className="truncate text-xs leading-tight"
+                                >
                                   {event.event}
                                 </p>
                               </LastChangeHover>
-                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                                <p className="text-xs text-muted-foreground">{abbreviateCity(event.venueName)}</p>
+                              <div className="mt-0.5 flex items-center gap-1.5">
+                                <p className="min-w-0 truncate text-xs text-muted-foreground">
+                                  {abbreviateCity(event.venueName)} · {event.weekdayLabel.slice(0, 3)},{" "}
+                                  {formatStartMonthDay(event.startTimeValue)} · {formatStartTime(event.startTimeValue)}{" "}
+                                  {getVenueTimezone(event.venueName)}
+                                </p>
                                 {isPendingPublish && (
-                                  <Badge variant="secondary" className="bg-primary/12 text-primary">
+                                  <Badge variant="secondary" className="shrink-0 bg-primary/12 text-primary">
                                     Pending Publish
                                   </Badge>
                                 )}
@@ -8322,40 +8431,45 @@ export default function App() {
                           </div>
                         </TableCell>
 
-                        <TableCell className={cn("text-center sticky left-[340px] z-[1] has-[:hover]:z-[20]", stickyBg)}>
+                        <TableCell className={cn("text-center sticky left-[400px] z-[1] has-[:hover]:z-[20]", stickyBg)}>
                           <EventHealthBadge score={event.eventHealth} event={event} />
                         </TableCell>
 
-                        <TableCell className={cn("text-center sticky left-[420px] z-[1] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]", stickyBg)}>
-                          <select
+                        <TableCell className={cn("text-center sticky left-[480px] z-[1] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]", stickyBg)}>
+                          <Select
                             value={dummyPriceTier}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              const next = e.target.value;
+                            onValueChange={(next) => {
                               setPriceChangeWarning({
                                 title: "Confirm Price Tier Change",
                                 message: `Change price tier for "${event.event}" from ${dummyPriceTier} to ${next}?`,
                                 onConfirm: () => setEventPriceTiers((prev) => ({ ...prev, [event.id]: next })),
                               });
                             }}
-                            className="h-6 rounded border border-border/50 bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:border-border transition-colors"
                           >
-                            {PRICE_TIERS.map((t) => (
-                              <option key={t} value={t}>{t}</option>
-                            ))}
-                          </select>
+                            <SelectTrigger
+                              onClick={(e) => e.stopPropagation()}
+                              title={`Original tier: ${originalPriceTier}`}
+                              className="h-6 w-[68px] rounded border border-border/50 bg-background px-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:border-border transition-colors [&>svg]:h-3 [&>svg]:w-3"
+                            >
+                              <SelectValue>
+                                {dummyPriceTier}
+                                {dummyPriceTier === originalPriceTier ? " *" : ""}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent
+                              onClick={(e) => e.stopPropagation()}
+                              className="min-w-[8rem]"
+                            >
+                              {PRICE_TIERS.map((t) => (
+                                <SelectItem key={t} value={t} className="text-xs">
+                                  {t === originalPriceTier ? `${t} (Original)` : t}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
 
                         <TableCell className="border-l border-border/40">
-                          <div>
-                            <p className="text-foreground">{formatStartDate(event.startTimeValue)}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {event.weekdayLabel} {formatStartTime(event.startTimeValue)} {getVenueTimezone(event.venueName)}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
                           {event.daysInMarket !== null && event.salesWindowDays !== null
                             ? `${event.daysInMarket} / ${event.salesWindowDays}`
                             : event.daysInMarket ?? "--"}
@@ -8374,7 +8488,7 @@ export default function App() {
                         />
 
                         <TableCell className="text-center border-l border-border/40">
-                          {event.hallAtp !== null ? formatCurrency(event.hallAtp) : "--"}
+                          {event.hallAtp !== null ? formatCurrency(event.hallAtp * tierPriceMultiplier) : "--"}
                         </TableCell>
                         <TicketSalesCell
                           sold={event.hallSold}
@@ -8386,7 +8500,7 @@ export default function App() {
                         />
 
                         <TableCell className="text-center border-l border-border/40">
-                          {event.gaAtp !== null ? formatCurrency(event.gaAtp) : "--"}
+                          {event.gaAtp !== null ? formatCurrency(event.gaAtp * tierPriceMultiplier) : "--"}
                         </TableCell>
                         <TicketSalesCell
                           sold={event.gaSold}
