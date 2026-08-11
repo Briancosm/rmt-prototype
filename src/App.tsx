@@ -50,6 +50,8 @@ import {
   buildSeatGroupRecommendation,
   confidenceTierFor,
   confidenceTierLabels,
+  objectiveProjectedNetRevenue,
+  objectiveProjectedSellThroughPct,
   recommendationObjectiveLabels,
   sellThroughRecommendedPrice,
   summarizeRecommendations,
@@ -126,6 +128,11 @@ interface EventRecord {
   gaSold: number | null;
   gaSoldProjected: number | null;
   hallSoldPct: number | null;
+  /** Share of inventory held back from sale (house seats, production holds,
+   *  comps), as a percent of sellable inventory. Assigned in
+   *  normalizeVenueCapacities — not present in the raw mock records. The ticket
+   *  count is derived at render time so it tracks whatever venues report. */
+  heldbackPct?: number;
   daysRemaining: number | null;
   projectedRevenue: number | null;
   netTicketRevenue: number | null;
@@ -1499,6 +1506,12 @@ function normalizeVenueCapacities(events: EventRecord[]): EventRecord[] {
     const hallCapacity = 282 + ((index * 17) % 35);
     const next = { ...event };
 
+    // Heldback inventory has no raw mock value; assign a stable 5-12% per event
+    // so %Sold (of sellable) and Tot. %Sold (of sellable + held) diverge by a
+    // realistic amount. Kept as a percent rather than a count because GA
+    // capacity comes from seat groups and isn't known here.
+    next.heldbackPct = 5 + ((index * 7) % 8);
+
     if (event.domeSold !== null && event.soldPct !== null && event.soldPct > 0) {
       const domeSold = Math.round((domeCapacity * event.soldPct) / 100);
       const projectionRatio =
@@ -1701,6 +1714,30 @@ function formatPercent(value: number | null): string {
     return "--";
   }
   return `${value}%`;
+}
+
+// Adds up per-venue sales, treating a venue with no data as absent rather than
+// zero. Returns nulls only when no venue reported the field at all.
+function sumVenueSales(
+  venues: { sold: number | null; avail: number | null; projected: number | null }[],
+): { sold: number | null; avail: number | null; projected: number | null } {
+  const total = (values: (number | null)[]): number | null => {
+    const present = values.filter((value): value is number => value !== null);
+    return present.length > 0 ? present.reduce((sum, value) => sum + value, 0) : null;
+  };
+
+  return {
+    sold: total(venues.map((venue) => venue.sold)),
+    avail: total(venues.map((venue) => venue.avail)),
+    projected: total(venues.map((venue) => venue.projected)),
+  };
+}
+
+function percentOf(value: number | null, total: number | null): number | null {
+  if (value === null || total === null || total <= 0) {
+    return null;
+  }
+  return Math.round((value / total) * 100);
 }
 
 function formatSignedPercent(value: number | null): string {
@@ -8272,16 +8309,18 @@ export default function App() {
                 <col style={{width: '400px'}} />
                 <col style={{width: '80px'}} />
                 <col style={{width: '80px'}} />
-                <col style={{width: '110px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '105px'}} />
+                <col style={{width: '115px'}} />
+                <col style={{width: '115px'}} />
                 <col style={{width: '140px'}} />
                 <col style={{width: '170px'}} />
                 <col style={{width: '80px'}} />
                 <col style={{width: '170px'}} />
                 <col style={{width: '80px'}} />
                 <col style={{width: '170px'}} />
-                <col style={{width: '110px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '90px'}} />
                 <col style={{width: '90px'}} />
                 <col style={{width: '70px'}} />
                 <col style={{width: '100px'}} />
@@ -8296,10 +8335,14 @@ export default function App() {
                   />
                   <TableHead
                     colSpan={1}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0"
+                  />
+                  <TableHead
+                    colSpan={5}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold text-muted-foreground/60">Schedule</span>
+                      <span className="text-[9px] font-semibold text-muted-foreground/60">Sales and Revenue</span>
                     </div>
                   </TableHead>
                   <TableHead
@@ -8324,14 +8367,6 @@ export default function App() {
                   >
                     <div className="flex h-full items-center justify-center">
                       <span className="text-[9px] font-semibold text-muted-foreground/60">GA</span>
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    colSpan={3}
-                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
-                  >
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold text-muted-foreground/60">Revenue</span>
                     </div>
                   </TableHead>
                   <TableHead colSpan={5} className="h-5 border-b border-border/60 bg-secondary/20 p-0 text-center">
@@ -8367,8 +8402,23 @@ export default function App() {
                     Health
                   </TableHead>
                   <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[480px] z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]">Tier</TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70">
-                    Days / Window
+                  <TableHead className="w-[130px] whitespace-nowrap border-x border-border/70 text-center">
+                    D / W / %
+                  </TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap border-l border-border/70 text-center">
+                    Sold / Avail. / Held
+                  </TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">
+                    %Sold / Tot. %Sold
+                  </TableHead>
+                  <TableHead className="w-[105px] whitespace-nowrap text-center">
+                    Proj. % Sold
+                  </TableHead>
+                  <TableHead className="w-[115px] whitespace-nowrap text-center">
+                    Net Revenue
+                  </TableHead>
+                  <TableHead className="w-[115px] whitespace-nowrap border-r border-border/70 text-center">
+                    Proj. Net Rev
                   </TableHead>
                   <TableHead className="w-[140px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
                   <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
@@ -8376,15 +8426,6 @@ export default function App() {
                   <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
                   <TableHead className="w-[80px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
                   <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">
-                    Net Rev
-                  </TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap text-center">
-                    Proj. Rev
-                  </TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap border-r border-border/70 text-center">
-                    Opt. Proj
-                  </TableHead>
                   <TableHead className="w-[90px] whitespace-nowrap">TOF</TableHead>
                   <TableHead className="w-[70px] whitespace-nowrap">FCR</TableHead>
                   <TableHead className="w-[100px] whitespace-nowrap">FCR vs. Exp.</TableHead>
@@ -8439,6 +8480,35 @@ export default function App() {
                     0.65,
                   );
                   const netTicketRevenueBreakdown = getNetTicketRevenueBreakdown(event);
+
+                  // Event-level roll-up across Dome + Hall + GA for the "Sales and
+                  // Revenue" section. Available is sellable inventory (excludes
+                  // holds), so %Sold measures against it and Tot. %Sold measures
+                  // against sellable + held.
+                  const salesRollup = sumVenueSales([
+                    { sold: event.domeSold, avail: domeAvail, projected: event.domeSoldProjected },
+                    { sold: event.hallSold, avail: hallAvail, projected: event.hallSoldProjected },
+                    { sold: event.gaSold, avail: gaAvail, projected: event.gaSoldProjected },
+                  ]);
+                  const heldTickets =
+                    salesRollup.avail !== null && event.heldbackPct !== undefined
+                      ? Math.round((salesRollup.avail * event.heldbackPct) / 100)
+                      : null;
+                  const totalInventory =
+                    salesRollup.avail !== null ? salesRollup.avail + (heldTickets ?? 0) : null;
+                  const pctSold = percentOf(salesRollup.sold, salesRollup.avail);
+                  const totalPctSold = percentOf(salesRollup.sold, totalInventory);
+                  const projPctSold = percentOf(salesRollup.projected, salesRollup.avail);
+                  const cycleCompletePct = percentOf(event.daysInMarket, event.salesWindowDays);
+                  const objectiveProjPctSold = objectiveProjectedSellThroughPct(
+                    event.id,
+                    projPctSold,
+                  );
+                  const objectiveProjNetRev = objectiveProjectedNetRevenue(
+                    event.id,
+                    event.projectedNetRevenue,
+                    event.optimizedProjected,
+                  );
 
                   // Pre-blend transparent attention colors onto card (white) to get an opaque
                   // background — required so sticky cells fully cover horizontally scrolled content.
@@ -8547,50 +8617,87 @@ export default function App() {
                           </Select>
                         </TableCell>
 
-                        <TableCell className="border-l border-border/40">
-                          {event.daysInMarket !== null && event.salesWindowDays !== null
-                            ? `${event.daysInMarket} / ${event.salesWindowDays}`
-                            : event.daysInMarket ?? "--"}
+                        <TableCell className="whitespace-nowrap border-x border-border/40 text-center tabular-nums">
+                          {event.daysInMarket !== null && event.salesWindowDays !== null ? (
+                            <>
+                              {event.daysInMarket}
+                              <span className="text-muted-foreground/60"> / </span>
+                              {event.salesWindowDays}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {cycleCompletePct !== null ? `${cycleCompletePct}%` : "--"}
+                              </span>
+                            </>
+                          ) : (
+                            event.daysInMarket ?? "--"
+                          )}
                         </TableCell>
-
-                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
-                          {domePriceRange}
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center tabular-nums">
+                          {salesRollup.sold === null || salesRollup.avail === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatWholeNumber(salesRollup.sold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              {formatWholeNumber(salesRollup.avail)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatWholeNumber(heldTickets)}
+                              </span>
+                            </>
+                          )}
                         </TableCell>
-                        <TicketSalesCell
-                          sold={event.domeSold}
-                          avail={domeAvail}
-                          projected={event.domeSoldProjected}
-                          pct={event.soldPct}
-                          event={event}
-                          className="border-r border-border/40"
-                        />
-
-                        <TableCell className="text-center border-l border-border/40">
-                          {event.hallAtp !== null ? formatCurrency(event.hallAtp * tierPriceMultiplier) : "--"}
+                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                          {pctSold === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatPercent(pctSold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatPercent(totalPctSold)}
+                              </span>
+                            </>
+                          )}
                         </TableCell>
-                        <TicketSalesCell
-                          sold={event.hallSold}
-                          avail={hallAvail}
-                          projected={event.hallSoldProjected}
-                          pct={event.hallSoldPct}
-                          event={event}
-                          className="border-r border-border/40"
-                        />
-
-                        <TableCell className="text-center border-l border-border/40">
-                          {event.gaAtp !== null ? formatCurrency(event.gaAtp * tierPriceMultiplier) : "--"}
+                        <TableCell className="text-center tabular-nums">
+                          {projPctSold === null ? (
+                            "--"
+                          ) : (
+                            <HoverOverlay
+                              className="mx-auto"
+                              align="center"
+                              contentClassName="w-[230px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Projected % Sold
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Rev. Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(objectiveProjPctSold.revenue)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">ST Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(objectiveProjPctSold.sellThrough)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
+                              <span
+                                tabIndex={0}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                              >
+                                {formatPercent(projPctSold)}
+                              </span>
+                            </HoverOverlay>
+                          )}
                         </TableCell>
-                        <TicketSalesCell
-                          sold={event.gaSold}
-                          avail={gaAvail}
-                          projected={event.gaSoldProjected}
-                          pct={gaSoldPct}
-                          event={event}
-                          className="border-r border-border/40"
-                        />
                         <TableCell
                           className={cn(
-                            "border-l border-border/40 text-center px-5",
+                            "text-center px-5",
                             event.attention === "underperforming" && "text-destructive",
                           )}
                         >
@@ -8633,12 +8740,77 @@ export default function App() {
                             </HoverOverlay>
                           )}
                         </TableCell>
-                        <TableCell className="text-center px-5">
-                          {formatCurrency(event.projectedNetRevenue)}
-                        </TableCell>
                         <TableCell className="border-r border-border/40 text-center px-5">
-                          {formatCurrency(event.optimizedProjected)}
+                          {event.projectedNetRevenue === null ? (
+                            "--"
+                          ) : (
+                            <HoverOverlay
+                              className="mx-auto"
+                              align="center"
+                              contentClassName="w-[235px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Projected Net Revenue
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Rev. Opt. Proj. Net Rev</span>
+                                      <span className="text-muted-foreground">{formatCurrency(objectiveProjNetRev.revenue)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">ST Opt. Proj. Net Rev</span>
+                                      <span className="text-muted-foreground">{formatCurrency(objectiveProjNetRev.sellThrough)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
+                              <span
+                                tabIndex={0}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                              >
+                                {formatCurrency(event.projectedNetRevenue)}
+                              </span>
+                            </HoverOverlay>
+                          )}
                         </TableCell>
+
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
+                          {domePriceRange}
+                        </TableCell>
+                        <TicketSalesCell
+                          sold={event.domeSold}
+                          avail={domeAvail}
+                          projected={event.domeSoldProjected}
+                          pct={event.soldPct}
+                          event={event}
+                          className="border-r border-border/40"
+                        />
+
+                        <TableCell className="text-center border-l border-border/40">
+                          {event.hallAtp !== null ? formatCurrency(event.hallAtp * tierPriceMultiplier) : "--"}
+                        </TableCell>
+                        <TicketSalesCell
+                          sold={event.hallSold}
+                          avail={hallAvail}
+                          projected={event.hallSoldProjected}
+                          pct={event.hallSoldPct}
+                          event={event}
+                          className="border-r border-border/40"
+                        />
+
+                        <TableCell className="text-center border-l border-border/40">
+                          {event.gaAtp !== null ? formatCurrency(event.gaAtp * tierPriceMultiplier) : "--"}
+                        </TableCell>
+                        <TicketSalesCell
+                          sold={event.gaSold}
+                          avail={gaAvail}
+                          projected={event.gaSoldProjected}
+                          pct={gaSoldPct}
+                          event={event}
+                          className="border-r border-border/40"
+                        />
                         <TableCell>{formatWholeNumber(event.tof)}</TableCell>
                         <TableCell>{formatPercent(event.fcrPct)}</TableCell>
                         <TableCell
@@ -8695,7 +8867,7 @@ export default function App() {
 
                       {isExpanded && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                          <TableCell colSpan={15} className="p-0">
+                          <TableCell colSpan={20} className="p-0">
                             <div className="mx-5 my-4 max-w-[1100px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
                               <div className="flex items-center gap-4 border-b border-border/50 px-4 py-2 bg-secondary/10">
                                 <span className="text-[11px] text-muted-foreground">

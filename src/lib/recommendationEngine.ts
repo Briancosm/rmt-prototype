@@ -147,6 +147,56 @@ export function sellThroughRecommendedPrice(
   return round(Math.max(1, originalPrice * (1 + pctMove)), 2);
 }
 
+/** A projection under each objective, alongside the current-price baseline. */
+export interface ObjectiveProjection {
+  revenue: number | null;
+  sellThrough: number | null;
+}
+
+/**
+ * Projected sell-through under each objective. Revenue pricing trades volume
+ * for yield and so clears fewer seats than the current-price baseline;
+ * sell-through pricing buys volume with price and clears more. The pair
+ * straddles the baseline rather than sitting on one side of it.
+ */
+export function objectiveProjectedSellThroughPct(
+  eventId: string,
+  baselinePct: number | null,
+): ObjectiveProjection {
+  if (baselinePct === null) {
+    return { revenue: null, sellThrough: null };
+  }
+
+  const rng = createRng(`${eventId}:objectiveSellThrough`);
+  return {
+    revenue: clampValue(round(baselinePct - (3 + rng() * 6)), 0, 100),
+    sellThrough: clampValue(round(baselinePct + (4 + rng() * 7)), 0, 100),
+  };
+}
+
+/**
+ * Projected net revenue under each objective. The revenue figure is the
+ * event's own revenue-optimized projection; the sell-through figure gives up
+ * 35-65% of the headroom that revenue pricing captures over the baseline, so it
+ * still beats standing pat without matching a revenue-first price.
+ */
+export function objectiveProjectedNetRevenue(
+  eventId: string,
+  baseline: number | null,
+  revenueOptimized: number | null,
+): ObjectiveProjection {
+  if (baseline === null || revenueOptimized === null) {
+    return { revenue: revenueOptimized, sellThrough: null };
+  }
+
+  const rng = createRng(`${eventId}:objectiveNetRevenue`);
+  const headroom = revenueOptimized - baseline;
+  return {
+    revenue: revenueOptimized,
+    sellThrough: round(baseline + headroom * (0.35 + rng() * 0.3)),
+  };
+}
+
 function buildDrivers(
   rng: () => number,
   input: RecommendationInput,
