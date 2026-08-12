@@ -1740,6 +1740,30 @@ function percentOf(value: number | null, total: number | null): number | null {
   return Math.round((value / total) * 100);
 }
 
+// Same held-back-inventory math as the event-level roll-up, scoped to one
+// venue (Dome/Hall/GA) so each venue's %Sold and Tot. %Sold reflect its own
+// availability rather than the event-wide total.
+function venueSalesBreakdown(
+  sold: number | null,
+  avail: number | null,
+  projected: number | null,
+  heldbackPct: number | undefined,
+): {
+  held: number | null;
+  pctSold: number | null;
+  totalPctSold: number | null;
+  projPctSold: number | null;
+} {
+  const held = avail !== null && heldbackPct !== undefined ? Math.round((avail * heldbackPct) / 100) : null;
+  const totalInventory = avail !== null ? avail + (held ?? 0) : null;
+  return {
+    held,
+    pctSold: percentOf(sold, avail),
+    totalPctSold: percentOf(sold, totalInventory),
+    projPctSold: percentOf(projected, avail),
+  };
+}
+
 function formatSignedPercent(value: number | null): string {
   if (value === null) {
     return "--";
@@ -1893,113 +1917,6 @@ function SoldAvailCell({
         <span className="cursor-help underline decoration-dotted underline-offset-4 transition-colors hover:text-primary focus:outline-none">
           {formatWholeNumber(sold)} / {formatWholeNumber(avail)}
         </span>
-      </HoverOverlay>
-    </TableCell>
-  );
-}
-
-function TicketSalesCell({
-  sold,
-  avail,
-  projected,
-  pct,
-  event,
-  className,
-}: {
-  sold: number | null;
-  avail: number | null;
-  projected: number | null;
-  pct: number | null;
-  event: EventRecord;
-  className?: string;
-}) {
-  if (sold === null || avail === null || avail <= 0) {
-    return <TableCell className={cn("text-center tabular-nums", className)}>--</TableCell>;
-  }
-
-  const soldPct = clamp((sold / avail) * 100, 0, 100);
-  const displayPct = pct ?? Math.round(soldPct);
-  const projPct = projected !== null ? clamp((projected / avail) * 100, 0, 100) : null;
-  const { groupSales, consumer } = getSoldBreakdown(sold, event);
-  const barColor = displayPct >= 75 ? "bg-success" : displayPct >= 51 ? "bg-primary" : "bg-warning";
-  const tintColor =
-    displayPct >= 75 ? "bg-success/25" : displayPct >= 51 ? "bg-primary/25" : "bg-warning/25";
-  const pctColor =
-    displayPct >= 75 ? "text-success" : displayPct >= 51 ? "text-primary" : "text-warning";
-
-  return (
-    <TableCell className={cn("tabular-nums", className)}>
-      <HoverOverlay
-        className="mx-auto"
-        align="center"
-        contentClassName="w-[210px] p-3"
-        content={
-          <>
-            <p className="mb-2 text-xs font-semibold text-foreground">Ticket Sales</p>
-            <ul className="space-y-1.5">
-              <li className="flex items-center justify-between gap-3 text-xs">
-                <span className="font-medium text-foreground">Sold</span>
-                <span className="text-muted-foreground">
-                  {formatWholeNumber(sold)} ({Math.round(soldPct)}%)
-                </span>
-              </li>
-              {projected !== null && (
-                <li className="flex items-center justify-between gap-3 text-xs">
-                  <span className="font-medium text-foreground">Projected Sold</span>
-                  <span className="text-muted-foreground">
-                    {formatWholeNumber(projected)}
-                    {projPct !== null ? ` (${Math.round(projPct)}%)` : ""}
-                  </span>
-                </li>
-              )}
-              <li className="flex items-center justify-between gap-3 text-xs">
-                <span className="font-medium text-foreground">Available</span>
-                <span className="text-muted-foreground">{formatWholeNumber(avail)}</span>
-              </li>
-              <li className="flex items-center justify-between gap-3 text-xs">
-                <span className="font-medium text-foreground">Remaining</span>
-                <span className="text-muted-foreground">
-                  {formatWholeNumber(Math.max(0, avail - sold))}
-                </span>
-              </li>
-              <li className="mt-1 flex items-center justify-between gap-3 border-t border-border/60 pt-1.5 text-xs">
-                <span className="font-medium text-foreground">Group Sales</span>
-                <span className="text-muted-foreground">{formatWholeNumber(groupSales)}</span>
-              </li>
-              <li className="flex items-center justify-between gap-3 text-xs">
-                <span className="font-medium text-foreground">Consumer</span>
-                <span className="text-muted-foreground">{formatWholeNumber(consumer)}</span>
-              </li>
-            </ul>
-          </>
-        }
-      >
-        <div className="w-[150px]">
-          <div className="flex items-baseline justify-between text-xs">
-            <span className="cursor-help underline decoration-dotted underline-offset-4 transition-colors hover:text-primary">
-              {formatWholeNumber(sold)} / {formatWholeNumber(avail)}
-            </span>
-            <span className={cn("font-semibold", pctColor)}>{displayPct}%</span>
-          </div>
-          <div className="relative mt-1 h-1.5 rounded-full bg-muted-foreground/20">
-            {projPct !== null && (
-              <div
-                className={cn("absolute inset-y-0 left-0 rounded-full", tintColor)}
-                style={{ width: `${projPct}%` }}
-              />
-            )}
-            <div
-              className={cn("absolute inset-y-0 left-0 rounded-full", barColor)}
-              style={{ width: `${soldPct}%` }}
-            />
-            {projPct !== null && (
-              <div
-                className="absolute -bottom-0.5 -top-0.5 w-px bg-foreground/70"
-                style={{ left: `${projPct}%` }}
-              />
-            )}
-          </div>
-        </div>
       </HoverOverlay>
     </TableCell>
   );
@@ -8315,12 +8232,20 @@ export default function App() {
                 <col style={{width: '105px'}} />
                 <col style={{width: '115px'}} />
                 <col style={{width: '115px'}} />
-                <col style={{width: '140px'}} />
-                <col style={{width: '170px'}} />
-                <col style={{width: '80px'}} />
-                <col style={{width: '170px'}} />
-                <col style={{width: '80px'}} />
-                <col style={{width: '170px'}} />
+                <col style={{width: '110px'}} />
+                <col style={{width: '95px'}} />
+                <col style={{width: '85px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '95px'}} />
+                <col style={{width: '110px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '95px'}} />
+                <col style={{width: '85px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '95px'}} />
                 <col style={{width: '90px'}} />
                 <col style={{width: '70px'}} />
                 <col style={{width: '100px'}} />
@@ -8346,7 +8271,7 @@ export default function App() {
                     </div>
                   </TableHead>
                   <TableHead
-                    colSpan={2}
+                    colSpan={6}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
@@ -8354,7 +8279,7 @@ export default function App() {
                     </div>
                   </TableHead>
                   <TableHead
-                    colSpan={2}
+                    colSpan={4}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
@@ -8362,7 +8287,7 @@ export default function App() {
                     </div>
                   </TableHead>
                   <TableHead
-                    colSpan={2}
+                    colSpan={4}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
@@ -8420,12 +8345,20 @@ export default function App() {
                   <TableHead className="w-[115px] whitespace-nowrap border-r border-border/70 text-center">
                     Proj. Net Rev
                   </TableHead>
-                  <TableHead className="w-[140px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
-                  <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
-                  <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
-                  <TableHead className="w-[170px] whitespace-nowrap text-center border-r border-border/70">Sales</TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">Price Range</TableHead>
+                  <TableHead className="w-[95px] whitespace-nowrap text-center">Sample Price</TableHead>
+                  <TableHead className="w-[85px] whitespace-nowrap text-center">ATP</TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
+                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">Proj. % Sold</TableHead>
+                  <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">Price Range</TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
+                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">Proj. % Sold</TableHead>
+                  <TableHead className="w-[85px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
+                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">Proj. % Sold</TableHead>
                   <TableHead className="w-[90px] whitespace-nowrap">TOF</TableHead>
                   <TableHead className="w-[70px] whitespace-nowrap">FCR</TableHead>
                   <TableHead className="w-[100px] whitespace-nowrap">FCR vs. Exp.</TableHead>
@@ -8508,6 +8441,47 @@ export default function App() {
                     event.id,
                     event.projectedNetRevenue,
                     event.optimizedProjected,
+                  );
+                  const sampleSeatGroup = event.seatGroups[0] as SeatGroup | undefined;
+                  const samplePrice =
+                    sampleSeatGroup !== undefined ? sampleSeatGroup.currentPrice * tierPriceMultiplier : null;
+                  const domeSalesBreakdown = venueSalesBreakdown(
+                    event.domeSold,
+                    domeAvail,
+                    event.domeSoldProjected,
+                    event.heldbackPct,
+                  );
+                  const domeObjectiveProjPctSold = objectiveProjectedSellThroughPct(
+                    `${event.id}:dome`,
+                    domeSalesBreakdown.projPctSold,
+                  );
+                  // Seat groups are Dome inventory, so they inherit the Dome's own
+                  // realized-to-projected lift. Derived from the breakdown rather
+                  // than domeProjectedSellthroughPct, which is flat or null for most
+                  // mock events and would leave every projection equal to actuals.
+                  const domeProjectionLift = getSellthroughLift(
+                    domeSalesBreakdown.pctSold,
+                    domeSalesBreakdown.projPctSold,
+                  );
+                  const hallSalesBreakdown = venueSalesBreakdown(
+                    event.hallSold,
+                    hallAvail,
+                    event.hallSoldProjected,
+                    event.heldbackPct,
+                  );
+                  const hallObjectiveProjPctSold = objectiveProjectedSellThroughPct(
+                    `${event.id}:hall`,
+                    hallSalesBreakdown.projPctSold,
+                  );
+                  const gaSalesBreakdown = venueSalesBreakdown(
+                    event.gaSold,
+                    gaAvail,
+                    event.gaSoldProjected,
+                    event.heldbackPct,
+                  );
+                  const gaObjectiveProjPctSold = objectiveProjectedSellThroughPct(
+                    `${event.id}:ga`,
+                    gaSalesBreakdown.projPctSold,
                   );
 
                   // Pre-blend transparent attention colors onto card (white) to get an opaque
@@ -8779,38 +8753,209 @@ export default function App() {
                         <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
                           {domePriceRange}
                         </TableCell>
-                        <TicketSalesCell
-                          sold={event.domeSold}
-                          avail={domeAvail}
-                          projected={event.domeSoldProjected}
-                          pct={event.soldPct}
-                          event={event}
-                          className="border-r border-border/40"
-                        />
-
-                        <TableCell className="text-center border-l border-border/40">
-                          {event.hallAtp !== null ? formatCurrency(event.hallAtp * tierPriceMultiplier) : "--"}
+                        <TableCell className="whitespace-nowrap text-center">
+                          {formatCurrency(samplePrice)}
                         </TableCell>
-                        <TicketSalesCell
-                          sold={event.hallSold}
-                          avail={hallAvail}
-                          projected={event.hallSoldProjected}
-                          pct={event.hallSoldPct}
-                          event={event}
-                          className="border-r border-border/40"
-                        />
+                        <TableCell className="whitespace-nowrap text-center">
+                          {event.domeAtp !== null ? formatCurrency(event.domeAtp * tierPriceMultiplier) : "--"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                          {event.domeSold === null || domeAvail === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatWholeNumber(event.domeSold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              {formatWholeNumber(domeAvail)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatWholeNumber(domeSalesBreakdown.held)}
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                          {domeSalesBreakdown.pctSold === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatPercent(domeSalesBreakdown.pctSold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatPercent(domeSalesBreakdown.totalPctSold)}
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums border-r border-border/40">
+                          {domeSalesBreakdown.projPctSold === null ? (
+                            "--"
+                          ) : (
+                            <HoverOverlay
+                              className="mx-auto"
+                              align="center"
+                              contentClassName="w-[230px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Projected % Sold
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Rev. Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(domeObjectiveProjPctSold.revenue)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">ST Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(domeObjectiveProjPctSold.sellThrough)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
+                              <span
+                                tabIndex={0}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                              >
+                                {formatPercent(domeSalesBreakdown.projPctSold)}
+                              </span>
+                            </HoverOverlay>
+                          )}
+                        </TableCell>
 
-                        <TableCell className="text-center border-l border-border/40">
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
+                          {domePriceRange}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                          {event.hallSold === null || hallAvail === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatWholeNumber(event.hallSold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              {formatWholeNumber(hallAvail)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatWholeNumber(hallSalesBreakdown.held)}
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                          {hallSalesBreakdown.pctSold === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatPercent(hallSalesBreakdown.pctSold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatPercent(hallSalesBreakdown.totalPctSold)}
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums border-r border-border/40">
+                          {hallSalesBreakdown.projPctSold === null ? (
+                            "--"
+                          ) : (
+                            <HoverOverlay
+                              className="mx-auto"
+                              align="center"
+                              contentClassName="w-[230px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Projected % Sold
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Rev. Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(hallObjectiveProjPctSold.revenue)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">ST Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(hallObjectiveProjPctSold.sellThrough)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
+                              <span
+                                tabIndex={0}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                              >
+                                {formatPercent(hallSalesBreakdown.projPctSold)}
+                              </span>
+                            </HoverOverlay>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
                           {event.gaAtp !== null ? formatCurrency(event.gaAtp * tierPriceMultiplier) : "--"}
                         </TableCell>
-                        <TicketSalesCell
-                          sold={event.gaSold}
-                          avail={gaAvail}
-                          projected={event.gaSoldProjected}
-                          pct={gaSoldPct}
-                          event={event}
-                          className="border-r border-border/40"
-                        />
+                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                          {event.gaSold === null || gaAvail === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatWholeNumber(event.gaSold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              {formatWholeNumber(gaAvail)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatWholeNumber(gaSalesBreakdown.held)}
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                          {gaSalesBreakdown.pctSold === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatPercent(gaSalesBreakdown.pctSold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatPercent(gaSalesBreakdown.totalPctSold)}
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums border-r border-border/40">
+                          {gaSalesBreakdown.projPctSold === null ? (
+                            "--"
+                          ) : (
+                            <HoverOverlay
+                              className="mx-auto"
+                              align="center"
+                              contentClassName="w-[230px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Projected % Sold
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Rev. Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(gaObjectiveProjPctSold.revenue)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">ST Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(gaObjectiveProjPctSold.sellThrough)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
+                              <span
+                                tabIndex={0}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                              >
+                                {formatPercent(gaSalesBreakdown.projPctSold)}
+                              </span>
+                            </HoverOverlay>
+                          )}
+                        </TableCell>
                         <TableCell>{formatWholeNumber(event.tof)}</TableCell>
                         <TableCell>{formatPercent(event.fcrPct)}</TableCell>
                         <TableCell
@@ -8867,8 +9012,8 @@ export default function App() {
 
                       {isExpanded && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                          <TableCell colSpan={20} className="p-0">
-                            <div className="mx-5 my-4 max-w-[1100px] overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
+                          <TableCell colSpan={28} className="p-0">
+                            <div className="mx-5 my-4 w-fit overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
                               <div className="flex items-center gap-4 border-b border-border/50 px-4 py-2 bg-secondary/10">
                                 <span className="text-[11px] text-muted-foreground">
                                   <span className="font-medium">Event last change:</span>{" "}
@@ -8926,7 +9071,7 @@ export default function App() {
                                     </div>
                                   </div>
                                   </div>
-                                  <Table className="table-fixed" wrapperClassName="overflow-visible">
+                                  <Table className="table-fixed" wrapperClassName="overflow-visible" autoWidth>
                                     <TableHeader className="sticky top-[113.5px] z-[4] bg-secondary/55">
                                       <TableRow className="bg-card [&_th]:bg-secondary/55 hover:bg-secondary/55">
                                         <TableHead className="w-[40px] whitespace-nowrap">
@@ -8946,9 +9091,11 @@ export default function App() {
                                         <TableHead className="w-[120px] whitespace-nowrap">Seat Group</TableHead>
                                         <TableHead className="w-[100px] whitespace-nowrap">Original Price</TableHead>
                                         <TableHead className="w-[280px] whitespace-nowrap">Current Price</TableHead>
-                                        <TableHead className="w-[100px] whitespace-nowrap text-center">%</TableHead>
-                                        <TableHead className="w-[110px] whitespace-nowrap">Sold / Avail. Inv</TableHead>
-                                        <TableHead className="w-[110px] whitespace-nowrap">Proj. Revenue</TableHead>
+                                        <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
+                                        <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
+                                        <TableHead className="w-[105px] whitespace-nowrap text-center">Proj. % Sold</TableHead>
+                                        <TableHead className="w-[115px] whitespace-nowrap text-center">Net Revenue</TableHead>
+                                        <TableHead className="w-[130px] whitespace-nowrap text-center">Proj. Net Revenue</TableHead>
                                         <TableHead className="w-[80px] whitespace-nowrap">Yield</TableHead>
                                       </TableRow>
                                     </TableHeader>
@@ -8988,6 +9135,46 @@ export default function App() {
                                         const isSeatPriceDirty =
                                           seatGroup.currentPrice !==
                                           (publishedSeatGroup?.currentPrice ?? seatGroup.currentPrice);
+
+                                        // Seat groups carry no projected-sold or revenue fields, so
+                                        // project sell-through off the Dome's lift (same helper
+                                        // Hall/GA use) and value the tickets at the prices already
+                                        // shown in this row.
+                                        const sgSold = computeSgTicketsSold(seatGroup);
+                                        const sgAvail =
+                                          sgSold !== null ? sgSold + seatGroup.ticketsRemaining : null;
+                                        const sgProjSellthroughPct = projectSellthroughMetric(
+                                          seatGroup.soldPct,
+                                          domeProjectionLift,
+                                          1,
+                                        );
+                                        const sgProjectedSold =
+                                          sgAvail !== null && sgProjSellthroughPct !== null
+                                            ? Math.round((sgAvail * sgProjSellthroughPct) / 100)
+                                            : null;
+                                        const sgBreakdown = venueSalesBreakdown(
+                                          sgSold,
+                                          sgAvail,
+                                          sgProjectedSold,
+                                          event.heldbackPct,
+                                        );
+                                        const sgObjectiveProjPctSold = objectiveProjectedSellThroughPct(
+                                          seatRecommendationKey,
+                                          sgBreakdown.projPctSold,
+                                        );
+                                        const sgNetRevenue =
+                                          sgSold !== null ? sgSold * seatGroup.currentPrice : null;
+                                        const sgProjNetRevenue =
+                                          sgProjectedSold !== null
+                                            ? sgProjectedSold * seatGroup.currentPrice
+                                            : null;
+                                        // Both objectives priced directly off their own recommended
+                                        // price rather than a seeded spread — those prices already
+                                        // exist per objective for this seat group.
+                                        const sgRevOptProjNetRevenue =
+                                          sgProjectedSold !== null ? sgProjectedSold * revenueRecPrice : null;
+                                        const sgStOptProjNetRevenue =
+                                          sgProjectedSold !== null ? sgProjectedSold * sellThroughRecPrice : null;
 
                                         return (
                                           <TableRow key={seatGroup.id}>
@@ -9224,17 +9411,107 @@ export default function App() {
                                               )}
                                           </div>
                                         </TableCell>
-                                        <TableCell className="text-center"><SellThroughBar pct={seatGroup.soldPct} compact /></TableCell>
-                                        <TableCell className="tabular-nums">
-                                          {(() => {
-                                            const sold = computeSgTicketsSold(seatGroup);
-                                            const avail = sold !== null ? sold + seatGroup.ticketsRemaining : null;
-                                            return sold !== null && avail !== null
-                                              ? `${formatWholeNumber(sold)} / ${formatWholeNumber(avail)}`
-                                              : `— / —`;
-                                          })()}
+                                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                                          {sgBreakdown.pctSold === null ? (
+                                            "--"
+                                          ) : (
+                                            <>
+                                              {formatPercent(sgBreakdown.pctSold)}
+                                              <span className="text-muted-foreground/60"> / </span>
+                                              <span className="text-muted-foreground">
+                                                {formatPercent(sgBreakdown.totalPctSold)}
+                                              </span>
+                                            </>
+                                          )}
                                         </TableCell>
-                                        <TableCell>{formatCurrency(seatGroup.projectedRevenue)}</TableCell>
+                                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                                          {sgSold === null || sgAvail === null ? (
+                                            "--"
+                                          ) : (
+                                            <>
+                                              {formatWholeNumber(sgSold)}
+                                              <span className="text-muted-foreground/60"> / </span>
+                                              {formatWholeNumber(sgAvail)}
+                                              <span className="text-muted-foreground/60"> / </span>
+                                              <span className="text-muted-foreground">
+                                                {formatWholeNumber(sgBreakdown.held)}
+                                              </span>
+                                            </>
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="text-center tabular-nums">
+                                          {sgBreakdown.projPctSold === null ? (
+                                            "--"
+                                          ) : (
+                                            <HoverOverlay
+                                              className="mx-auto"
+                                              align="center"
+                                              contentClassName="w-[230px] p-3"
+                                              content={
+                                                <>
+                                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                                    Projected % Sold
+                                                  </p>
+                                                  <ul className="space-y-1.5">
+                                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                                      <span className="font-medium text-foreground">Rev. Opt. Proj. % Sold</span>
+                                                      <span className="text-muted-foreground">{formatPercent(sgObjectiveProjPctSold.revenue)}</span>
+                                                    </li>
+                                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                                      <span className="font-medium text-foreground">ST Opt. Proj. % Sold</span>
+                                                      <span className="text-muted-foreground">{formatPercent(sgObjectiveProjPctSold.sellThrough)}</span>
+                                                    </li>
+                                                  </ul>
+                                                </>
+                                              }
+                                            >
+                                              <span
+                                                tabIndex={0}
+                                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                              >
+                                                {formatPercent(sgBreakdown.projPctSold)}
+                                              </span>
+                                            </HoverOverlay>
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="text-center tabular-nums">
+                                          {formatCurrency(sgNetRevenue)}
+                                        </TableCell>
+                                        <TableCell className="text-center tabular-nums">
+                                          {sgProjNetRevenue === null ? (
+                                            "--"
+                                          ) : (
+                                            <HoverOverlay
+                                              className="mx-auto"
+                                              align="center"
+                                              contentClassName="w-[245px] p-3"
+                                              content={
+                                                <>
+                                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                                    Projected Net Revenue
+                                                  </p>
+                                                  <ul className="space-y-1.5">
+                                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                                      <span className="font-medium text-foreground">Rev. Opt. Proj. Net Rev</span>
+                                                      <span className="text-muted-foreground">{formatCurrency(sgRevOptProjNetRevenue)}</span>
+                                                    </li>
+                                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                                      <span className="font-medium text-foreground">ST Opt. Proj. Net Rev</span>
+                                                      <span className="text-muted-foreground">{formatCurrency(sgStOptProjNetRevenue)}</span>
+                                                    </li>
+                                                  </ul>
+                                                </>
+                                              }
+                                            >
+                                              <span
+                                                tabIndex={0}
+                                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                              >
+                                                {formatCurrency(sgProjNetRevenue)}
+                                              </span>
+                                            </HoverOverlay>
+                                          )}
+                                        </TableCell>
                                         <TableCell>{formatCurrency(seatGroup.yield)}</TableCell>
                                           </TableRow>
                                         );
