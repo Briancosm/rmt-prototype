@@ -53,7 +53,6 @@ export default {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
-        projected: "hsl(var(--projected))",
       },
       borderRadius: {
         lg: "var(--radius)",

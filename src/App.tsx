@@ -8,6 +8,7 @@ import {
   ArrowUpDown,
   Check,
   ChevronDown,
+  Clock,
   ChevronRight,
   MoreHorizontal,
   Pencil,
@@ -2108,12 +2109,25 @@ const recommendationObjectivePillStyles: Record<RecommendationObjective, string>
   sellThrough: "border-success/40 bg-success/10 text-success hover:bg-success/20",
 };
 
-// Baseline color for table-level projected figures (Proj. % Sold, Proj. Net
-// Revenue/Rev) at every level — event, venue, and seat group — signaling that
-// these recompute every hourly refresh cycle rather than being live actuals.
-// Scoped to the trigger only, never the hover-overlay contents, so the
-// overlay's own Rev./ST-optimized breakdown keeps its normal muted styling.
-const PROJECTED_METRIC_TRIGGER_CLASS = "text-projected hover:text-primary focus:text-primary";
+// Column-header label for projected figures (Proj. % Sold, Proj. Net
+// Revenue/Rev, Yield) at every level — event, venue, and seat group. The
+// clock marks that these recompute every hourly refresh cycle rather than
+// being live actuals; kept on the header only, never the cell value or the
+// hover-overlay contents, so the data itself still reads as plain text.
+function ProjectedMetricHeaderLabel({ label }: { label: string }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center gap-1"
+      title="Projected — recalculates every refresh cycle"
+    >
+      {label}
+      <Clock
+        className="h-3 w-3 text-muted-foreground/70"
+        aria-hidden="true"
+      />
+    </span>
+  );
+}
 
 const HEALTH_RING_RADIUS = 16;
 const HEALTH_RING_CIRCUMFERENCE = 2 * Math.PI * HEALTH_RING_RADIUS;
@@ -8350,28 +8364,34 @@ export default function App() {
                     %Sold / Tot. %Sold
                   </TableHead>
                   <TableHead className="w-[105px] whitespace-nowrap text-center">
-                    Proj. % Sold
+                    <ProjectedMetricHeaderLabel label="Proj. % Sold" />
                   </TableHead>
                   <TableHead className="w-[115px] whitespace-nowrap text-center">
                     Net Revenue
                   </TableHead>
                   <TableHead className="w-[115px] whitespace-nowrap border-r border-border/70 text-center">
-                    Proj. Net Rev
+                    <ProjectedMetricHeaderLabel label="Proj. Net Rev" />
                   </TableHead>
                   <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">Price Range</TableHead>
                   <TableHead className="w-[95px] whitespace-nowrap text-center">Sample Price</TableHead>
                   <TableHead className="w-[85px] whitespace-nowrap text-center">ATP</TableHead>
                   <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
                   <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
-                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">Proj. % Sold</TableHead>
+                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
+                    <ProjectedMetricHeaderLabel label="Proj. % Sold" />
+                  </TableHead>
                   <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">Price Range</TableHead>
                   <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
                   <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
-                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">Proj. % Sold</TableHead>
+                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
+                    <ProjectedMetricHeaderLabel label="Proj. % Sold" />
+                  </TableHead>
                   <TableHead className="w-[85px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
                   <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
                   <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
-                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">Proj. % Sold</TableHead>
+                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
+                    <ProjectedMetricHeaderLabel label="Proj. % Sold" />
+                  </TableHead>
                   <TableHead className="w-[90px] whitespace-nowrap">TOF</TableHead>
                   <TableHead className="w-[70px] whitespace-nowrap">FCR</TableHead>
                   <TableHead className="w-[100px] whitespace-nowrap">FCR vs. Exp.</TableHead>
@@ -8675,7 +8695,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
                               >
                                 {formatPercent(projPctSold)}
                               </span>
@@ -8755,7 +8775,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
                               >
                                 {formatCurrency(event.projectedNetRevenue)}
                               </span>
@@ -8828,7 +8848,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
                               >
                                 {formatPercent(domeSalesBreakdown.projPctSold)}
                               </span>
@@ -8895,7 +8915,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
                               >
                                 {formatPercent(hallSalesBreakdown.projPctSold)}
                               </span>
@@ -8962,7 +8982,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
                               >
                                 {formatPercent(gaSalesBreakdown.projPctSold)}
                               </span>
@@ -9097,10 +9117,16 @@ export default function App() {
                                         <TableHead className="w-[280px] whitespace-nowrap">Current Price</TableHead>
                                         <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
                                         <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
-                                        <TableHead className="w-[105px] whitespace-nowrap text-center">Proj. % Sold</TableHead>
+                                        <TableHead className="w-[105px] whitespace-nowrap text-center">
+                                          <ProjectedMetricHeaderLabel label="Proj. % Sold" />
+                                        </TableHead>
                                         <TableHead className="w-[115px] whitespace-nowrap text-center">Net Revenue</TableHead>
-                                        <TableHead className="w-[130px] whitespace-nowrap text-center">Proj. Net Revenue</TableHead>
-                                        <TableHead className="w-[80px] whitespace-nowrap">Yield</TableHead>
+                                        <TableHead className="w-[130px] whitespace-nowrap text-center">
+                                          <ProjectedMetricHeaderLabel label="Proj. Net Revenue" />
+                                        </TableHead>
+                                        <TableHead className="w-[80px] whitespace-nowrap">
+                                          <ProjectedMetricHeaderLabel label="Yield" />
+                                        </TableHead>
                                       </TableRow>
                                     </TableHeader>
 
@@ -9494,7 +9520,8 @@ export default function App() {
                                                 tabIndex={0}
                                                 className={cn(
                                                   "cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none",
-                                                  previewTextStyle ?? PROJECTED_METRIC_TRIGGER_CLASS,
+                                                  previewTextStyle ??
+                                                    "text-foreground hover:text-primary focus:text-primary",
                                                 )}
                                               >
                                                 {formatPercent(
@@ -9539,7 +9566,8 @@ export default function App() {
                                                 tabIndex={0}
                                                 className={cn(
                                                   "cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none",
-                                                  previewTextStyle ?? PROJECTED_METRIC_TRIGGER_CLASS,
+                                                  previewTextStyle ??
+                                                    "text-foreground hover:text-primary focus:text-primary",
                                                 )}
                                               >
                                                 {formatCurrency(
@@ -9552,10 +9580,7 @@ export default function App() {
                                           )}
                                         </TableCell>
                                         <TableCell
-                                          className={cn(
-                                            "tabular-nums",
-                                            previewTextStyle ?? "text-projected",
-                                          )}
+                                          className={cn("tabular-nums", previewTextStyle)}
                                         >
                                           {formatCurrency(
                                             previewObjective !== null
