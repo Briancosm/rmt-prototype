@@ -1591,6 +1591,17 @@ function formatLastChange(iso: string | undefined): string {
   return `${m}/${day}/${yr} ${h12}:${min}${suffix}`;
 }
 
+// The table's data refreshes on the hour, so the last refresh is the most
+// recent hour boundary and the age is however many minutes past it we are.
+function minutesSinceHourlyRefresh(now: Date): number {
+  return now.getMinutes();
+}
+
+function formatLastUpdated(minutesAgo: number): string {
+  if (minutesAgo < 1) return "Last updated just now";
+  return `Last updated ${minutesAgo} minute${minutesAgo === 1 ? "" : "s"} ago`;
+}
+
 // Hover tooltip rendered through a portal with fixed positioning so it can
 // never be clipped or painted over by sticky table cells, scroll containers,
 // or neighboring rows.
@@ -2080,41 +2091,29 @@ const recommendationObjectiveShortLabels: Record<RecommendationObjective, string
   sellThrough: "S/T",
 };
 
-function RecommendationObjectiveToggle({
-  value,
-  onChange,
-}: {
-  value: RecommendationObjective;
-  onChange: (next: RecommendationObjective) => void;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Recommendation objective"
-      className="inline-flex items-center rounded-full border border-border/60 bg-background p-0.5"
-    >
-      {(["revenue", "sellThrough"] as const).map((objective) => (
-        <button
-          key={objective}
-          type="button"
-          role="radio"
-          aria-checked={value === objective}
-          onClick={() => onChange(objective)}
-          className={cn(
-            "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
-            value === objective
-              ? objective === "revenue"
-                ? "bg-primary text-primary-foreground"
-                : "bg-success text-success-foreground"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          {recommendationObjectiveLabels[objective]}
-        </button>
-      ))}
-    </div>
-  );
-}
+// Bulk actions (Apply All and the recommendation count beside it) need one
+// objective to price against. Individual seat groups now offer both objectives
+// side by side, so bulk apply follows the revenue recommendation.
+const BULK_RECOMMENDATION_OBJECTIVE: RecommendationObjective = "revenue";
+
+// Each objective owns a hue wherever it appears — the accept pills and, on
+// hover, the projection cells those pills would move.
+const recommendationObjectiveTextStyles: Record<RecommendationObjective, string> = {
+  revenue: "text-primary",
+  sellThrough: "text-success",
+};
+
+const recommendationObjectivePillStyles: Record<RecommendationObjective, string> = {
+  revenue: "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20",
+  sellThrough: "border-success/40 bg-success/10 text-success hover:bg-success/20",
+};
+
+// Baseline color for table-level projected figures (Proj. % Sold, Proj. Net
+// Revenue/Rev) at every level — event, venue, and seat group — signaling that
+// these recompute every hourly refresh cycle rather than being live actuals.
+// Scoped to the trigger only, never the hover-overlay contents, so the
+// overlay's own Rev./ST-optimized breakdown keeps its normal muted styling.
+const PROJECTED_METRIC_TRIGGER_CLASS = "text-projected hover:text-primary focus:text-primary";
 
 const HEALTH_RING_RADIUS = 16;
 const HEALTH_RING_CIRCUMFERENCE = 2 * Math.PI * HEALTH_RING_RADIUS;
@@ -5891,11 +5890,12 @@ export default function App() {
   const [recommendedReviewValuesById, setRecommendedReviewValuesById] = useState<Record<string, string>>({});
   const [draftSeatRecommendationUndoById, setDraftSeatRecommendationUndoById] = useState<Record<string, number>>({});
   const [stagedRecommendationObjectiveById, setStagedRecommendationObjectiveById] = useState<Record<string, RecommendationObjective>>({});
-  const [recommendationObjectiveByEventId, setRecommendationObjectiveByEventId] = useState<Record<string, RecommendationObjective>>({});
-  const getRecommendationObjective = (eventId: string): RecommendationObjective =>
-    recommendationObjectiveByEventId[eventId] ?? "revenue";
-  const setRecommendationObjective = (eventId: string, objective: RecommendationObjective) =>
-    setRecommendationObjectiveByEventId((current) => ({ ...current, [eventId]: objective }));
+  // Which accept pill is being hovered, so that seat group's projection cells
+  // can preview the figures that pill would produce.
+  const [hoveredSeatRecommendation, setHoveredSeatRecommendation] = useState<{
+    key: string;
+    objective: RecommendationObjective;
+  } | null>(null);
   const [recommendationDetailTarget, setRecommendationDetailTarget] = useState<{
     eventId: string;
     seatGroupId: string;
@@ -5925,6 +5925,19 @@ export default function App() {
     const timeoutId = window.setTimeout(() => setShowPublishOverlay(false), 2200);
     return () => window.clearTimeout(timeoutId);
   }, [showPublishOverlay]);
+
+  // Keeps the "last updated" age honest without re-rendering more often than
+  // the minute granularity the label actually shows.
+  const [minutesSinceRefresh, setMinutesSinceRefresh] = useState(() =>
+    minutesSinceHourlyRefresh(new Date()),
+  );
+  useEffect(() => {
+    const intervalId = window.setInterval(
+      () => setMinutesSinceRefresh(minutesSinceHourlyRefresh(new Date())),
+      15_000,
+    );
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     if (!activeBulkEditEventId) {
@@ -6243,22 +6256,18 @@ export default function App() {
       selectedEventIds.length > 0 ? selectedEventIds : draftEvents.map((e) => e.id);
     return draftEvents
       .filter((e) => scopeEventIds.includes(e.id))
-      .flatMap((event) => {
-        const objective = getRecommendationObjective(event.id);
-        return event.seatGroups
+      .flatMap((event) =>
+        event.seatGroups
           .map((sg) => ({
             eventId: event.id,
             seatGroupId: sg.id,
             currentPrice: sg.currentPrice,
-            recPrice:
-              objective === "revenue"
-                ? sg.recTicketPrice
-                : sellThroughRecommendedPrice(event.id, sg.id, sg.originalPrice),
-            objective,
+            recPrice: sg.recTicketPrice,
+            objective: BULK_RECOMMENDATION_OBJECTIVE,
           }))
-          .filter((rec) => !arePriceValuesEqual(rec.recPrice, rec.currentPrice));
-      });
-  }, [draftEvents, selectedEventIds, recommendationObjectiveByEventId]);
+          .filter((rec) => !arePriceValuesEqual(rec.recPrice, rec.currentPrice)),
+      );
+  }, [draftEvents, selectedEventIds]);
 
   const filterTabCounts = useMemo(
     () => ({
@@ -8199,6 +8208,10 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            <span className="ml-auto text-xs text-muted-foreground">
+              {formatLastUpdated(minutesSinceRefresh)}
+            </span>
           </div>
 
           {(() => {
@@ -8662,7 +8675,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
                               >
                                 {formatPercent(projPctSold)}
                               </span>
@@ -8742,7 +8755,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
                               >
                                 {formatCurrency(event.projectedNetRevenue)}
                               </span>
@@ -8815,7 +8828,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
                               >
                                 {formatPercent(domeSalesBreakdown.projPctSold)}
                               </span>
@@ -8882,7 +8895,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
                               >
                                 {formatPercent(hallSalesBreakdown.projPctSold)}
                               </span>
@@ -8949,7 +8962,7 @@ export default function App() {
                             >
                               <span
                                 tabIndex={0}
-                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                className={cn("cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none", PROJECTED_METRIC_TRIGGER_CLASS)}
                               >
                                 {formatPercent(gaSalesBreakdown.projPctSold)}
                               </span>
@@ -9060,15 +9073,6 @@ export default function App() {
                                       </div>
                                     )}
                                     </div>
-                                    <div className="ml-auto flex items-center gap-2">
-                                      <span className="text-[11px] font-medium text-muted-foreground">
-                                        Optimize for
-                                      </span>
-                                      <RecommendationObjectiveToggle
-                                        value={getRecommendationObjective(event.id)}
-                                        onChange={(next) => setRecommendationObjective(event.id, next)}
-                                      />
-                                    </div>
                                   </div>
                                   </div>
                                   <Table className="table-fixed" wrapperClassName="overflow-visible" autoWidth>
@@ -9106,22 +9110,28 @@ export default function App() {
                                           (item) => item.id === seatGroup.id,
                                         );
                                         const seatRecommendationKey = `${event.id}:${seatGroup.id}`;
-                                        const recommendationObjective = getRecommendationObjective(event.id);
-                                        const revenueRecPrice = seatGroup.recTicketPrice;
-                                        const sellThroughRecPrice = sellThroughRecommendedPrice(
-                                          event.id,
-                                          seatGroup.id,
-                                          seatGroup.originalPrice,
+                                        const recPriceByObjective: Record<RecommendationObjective, number> = {
+                                          revenue: seatGroup.recTicketPrice,
+                                          sellThrough: sellThroughRecommendedPrice(
+                                            event.id,
+                                            seatGroup.id,
+                                            seatGroup.originalPrice,
+                                          ),
+                                        };
+                                        const revenueRecPrice = recPriceByObjective.revenue;
+                                        const sellThroughRecPrice = recPriceByObjective.sellThrough;
+                                        // Both objectives stand on equal footing, so each is offered
+                                        // whenever it would move the price — neither is the fallback.
+                                        const offeredObjectives = (
+                                          ["revenue", "sellThrough"] as const
+                                        ).filter(
+                                          (objective) =>
+                                            !arePriceValuesEqual(
+                                              recPriceByObjective[objective],
+                                              seatGroup.currentPrice,
+                                            ),
                                         );
-                                        const activeRecPrice =
-                                          recommendationObjective === "revenue" ? revenueRecPrice : sellThroughRecPrice;
-                                        const otherRecPrice =
-                                          recommendationObjective === "revenue" ? sellThroughRecPrice : revenueRecPrice;
-                                        const otherObjective: RecommendationObjective =
-                                          recommendationObjective === "revenue" ? "sellThrough" : "revenue";
-                                        const isActiveRecDifferent = !arePriceValuesEqual(activeRecPrice, seatGroup.currentPrice);
-                                        const isOtherRecDifferent = !arePriceValuesEqual(otherRecPrice, seatGroup.currentPrice);
-                                        const isSeatRecommendationDifferent = isActiveRecDifferent || isOtherRecDifferent;
+                                        const isSeatRecommendationDifferent = offeredObjectives.length > 0;
                                         const seatGroupRecommendation =
                                           seatGroupRecommendationsByKey.get(seatRecommendationKey);
                                         const stagedObjective =
@@ -9171,10 +9181,36 @@ export default function App() {
                                         // Both objectives priced directly off their own recommended
                                         // price rather than a seeded spread — those prices already
                                         // exist per objective for this seat group.
-                                        const sgRevOptProjNetRevenue =
-                                          sgProjectedSold !== null ? sgProjectedSold * revenueRecPrice : null;
-                                        const sgStOptProjNetRevenue =
-                                          sgProjectedSold !== null ? sgProjectedSold * sellThroughRecPrice : null;
+                                        const sgObjectiveProjNetRevenue: Record<
+                                          RecommendationObjective,
+                                          number | null
+                                        > = {
+                                          revenue:
+                                            sgProjectedSold !== null ? sgProjectedSold * revenueRecPrice : null,
+                                          sellThrough:
+                                            sgProjectedSold !== null ? sgProjectedSold * sellThroughRecPrice : null,
+                                        };
+                                        const sgRevOptProjNetRevenue = sgObjectiveProjNetRevenue.revenue;
+                                        const sgStOptProjNetRevenue = sgObjectiveProjNetRevenue.sellThrough;
+                                        // Yield is revenue over the same unchanged inventory, so it
+                                        // moves in step with projected net revenue.
+                                        const scaleYield = (projected: number | null): number | null =>
+                                          projected !== null && sgProjNetRevenue !== null && sgProjNetRevenue > 0
+                                            ? seatGroup.yield * (projected / sgProjNetRevenue)
+                                            : null;
+                                        const sgObjectiveYield: Record<RecommendationObjective, number | null> = {
+                                          revenue: scaleYield(sgObjectiveProjNetRevenue.revenue),
+                                          sellThrough: scaleYield(sgObjectiveProjNetRevenue.sellThrough),
+                                        };
+                                        // Non-null only while one of this row's pills is hovered.
+                                        const previewObjective =
+                                          hoveredSeatRecommendation?.key === seatRecommendationKey
+                                            ? hoveredSeatRecommendation.objective
+                                            : null;
+                                        const previewTextStyle =
+                                          previewObjective !== null
+                                            ? cn(recommendationObjectiveTextStyles[previewObjective], "font-semibold")
+                                            : null;
 
                                         return (
                                           <TableRow key={seatGroup.id}>
@@ -9315,60 +9351,49 @@ export default function App() {
                                               ) : isSeatRecommendationDifferent ? (
                                                 <>
                                                   <span aria-hidden className="text-muted-foreground/50">→</span>
-                                                  {isActiveRecDifferent && (
+                                                  {offeredObjectives.map((objective) => (
                                                     <button
+                                                      key={objective}
                                                       type="button"
                                                       onClick={() =>
                                                         applyDraftSeatGroupRecommendation(
                                                           event.id,
                                                           seatGroup.id,
                                                           seatGroup.currentPrice,
-                                                          activeRecPrice,
-                                                          recommendationObjective,
+                                                          recPriceByObjective[objective],
+                                                          objective,
                                                         )
                                                       }
+                                                      onMouseEnter={() =>
+                                                        setHoveredSeatRecommendation({
+                                                          key: seatRecommendationKey,
+                                                          objective,
+                                                        })
+                                                      }
+                                                      onMouseLeave={() => setHoveredSeatRecommendation(null)}
+                                                      onFocus={() =>
+                                                        setHoveredSeatRecommendation({
+                                                          key: seatRecommendationKey,
+                                                          objective,
+                                                        })
+                                                      }
+                                                      onBlur={() => setHoveredSeatRecommendation(null)}
                                                       className={cn(
                                                         "inline-flex h-6 items-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold transition-colors",
-                                                        recommendationObjective === "revenue"
-                                                          ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-                                                          : "border-success/40 bg-success/10 text-success hover:bg-success/20",
+                                                        recommendationObjectivePillStyles[objective],
                                                       )}
-                                                      title={`Accept ${recommendationObjectiveLabels[recommendationObjective]}-optimized price`}
-                                                      aria-label={`Accept ${recommendationObjectiveLabels[recommendationObjective]}-optimized price of ${formatCurrency(activeRecPrice)} for ${seatGroup.name}`}
+                                                      title={`Accept ${recommendationObjectiveLabels[objective]}-optimized price`}
+                                                      aria-label={`Accept ${recommendationObjectiveLabels[objective]}-optimized price of ${formatCurrency(recPriceByObjective[objective])} for ${seatGroup.name}`}
                                                     >
                                                       <span className="text-[9px] font-bold uppercase tracking-wide opacity-70">
-                                                        {recommendationObjectiveShortLabels[recommendationObjective]}
+                                                        {recommendationObjectiveShortLabels[objective]}
                                                       </span>
                                                       <span className="tabular-nums">
-                                                        {formatCurrency(activeRecPrice)}
+                                                        {formatCurrency(recPriceByObjective[objective])}
                                                       </span>
                                                       <Plus className="h-3 w-3" />
                                                     </button>
-                                                  )}
-                                                  {isOtherRecDifferent && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() =>
-                                                        applyDraftSeatGroupRecommendation(
-                                                          event.id,
-                                                          seatGroup.id,
-                                                          seatGroup.currentPrice,
-                                                          otherRecPrice,
-                                                          otherObjective,
-                                                        )
-                                                      }
-                                                      className="inline-flex items-center gap-1 rounded px-1 text-[10px] font-medium text-muted-foreground/70 transition-colors hover:text-foreground hover:underline underline-offset-2"
-                                                      title={`Accept ${recommendationObjectiveLabels[otherObjective]}-optimized price`}
-                                                      aria-label={`Accept ${recommendationObjectiveLabels[otherObjective]}-optimized price of ${formatCurrency(otherRecPrice)} for ${seatGroup.name}`}
-                                                    >
-                                                      <span className="uppercase tracking-wide">
-                                                        {recommendationObjectiveShortLabels[otherObjective]}
-                                                      </span>
-                                                      <span className="tabular-nums">
-                                                        {formatCurrency(otherRecPrice)}
-                                                      </span>
-                                                    </button>
-                                                  )}
+                                                  ))}
                                                 </>
                                               ) : null}
                                               {SHOW_RECOMMENDATION_INSIGHTS &&
@@ -9467,9 +9492,16 @@ export default function App() {
                                             >
                                               <span
                                                 tabIndex={0}
-                                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                                className={cn(
+                                                  "cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none",
+                                                  previewTextStyle ?? PROJECTED_METRIC_TRIGGER_CLASS,
+                                                )}
                                               >
-                                                {formatPercent(sgBreakdown.projPctSold)}
+                                                {formatPercent(
+                                                  previewObjective !== null
+                                                    ? sgObjectiveProjPctSold[previewObjective]
+                                                    : sgBreakdown.projPctSold,
+                                                )}
                                               </span>
                                             </HoverOverlay>
                                           )}
@@ -9505,14 +9537,32 @@ export default function App() {
                                             >
                                               <span
                                                 tabIndex={0}
-                                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                                                className={cn(
+                                                  "cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none",
+                                                  previewTextStyle ?? PROJECTED_METRIC_TRIGGER_CLASS,
+                                                )}
                                               >
-                                                {formatCurrency(sgProjNetRevenue)}
+                                                {formatCurrency(
+                                                  previewObjective !== null
+                                                    ? sgObjectiveProjNetRevenue[previewObjective]
+                                                    : sgProjNetRevenue,
+                                                )}
                                               </span>
                                             </HoverOverlay>
                                           )}
                                         </TableCell>
-                                        <TableCell>{formatCurrency(seatGroup.yield)}</TableCell>
+                                        <TableCell
+                                          className={cn(
+                                            "tabular-nums",
+                                            previewTextStyle ?? "text-projected",
+                                          )}
+                                        >
+                                          {formatCurrency(
+                                            previewObjective !== null
+                                              ? sgObjectiveYield[previewObjective]
+                                              : seatGroup.yield,
+                                          )}
+                                        </TableCell>
                                           </TableRow>
                                         );
                                       })}
