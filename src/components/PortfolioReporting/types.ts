@@ -17,7 +17,7 @@ export interface ReportingFilters {
 }
 
 export const EMPTY_FILTERS: ReportingFilters = {
-  datePreset: "all",
+  datePreset: "last30",
   customDateFrom: "",
   customDateTo: "",
   locations: [],

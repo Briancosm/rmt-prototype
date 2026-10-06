@@ -43,7 +43,6 @@ export interface ReportingKpis {
   expectedRevenue: number;
   variance: number;
   variancePercent: number;
-  pricingOpportunity: number;
   daysRemaining: number;
   daysInMarket: number;
   salesWindowDays: number;
@@ -154,11 +153,6 @@ export function deriveKpis(event: ReportingEventInput): ReportingKpis {
     100,
   );
 
-  const pricingOpportunity = Math.max(
-    0,
-    (event.optimizedProjected ?? 0) - (event.projectedNetRevenue ?? 0),
-  );
-
   let riskFlag: RiskFlag;
   if (healthScore < 40 || variancePercent <= -25) {
     riskFlag = "critical";
@@ -177,7 +171,6 @@ export function deriveKpis(event: ReportingEventInput): ReportingKpis {
     expectedRevenue,
     variance,
     variancePercent,
-    pricingOpportunity,
     daysRemaining: event.daysRemaining ?? 0,
     daysInMarket,
     salesWindowDays,
@@ -768,4 +761,395 @@ export function generateChannelData(event: ReportingEventInput): ChannelModel {
   }
 
   return { slices, totalTickets: totalSold, insight };
+}
+
+// ---------------------------------------------------------------------------
+// Marketing channels (Email / Ads / Web)
+//
+// Demand-generation performance, distinct from `generateChannelData` above,
+// which attributes tickets to the *sales* channel they were bought through.
+// Attributed tickets here are allocated out of the event's actual sold count so
+// the three channels reconcile to the same total the pricing views report,
+// rather than floating free of it.
+// ---------------------------------------------------------------------------
+
+export type MarketingChannelId = "email" | "ads" | "web";
+
+export interface MarketingColumn {
+  id: string;
+  label: string;
+  numeric?: boolean;
+  /** Draws a sparkline to the left of this cell's value. */
+  spark?: boolean;
+}
+
+export interface MarketingRow {
+  id: string;
+  label: string;
+  values: Record<string, string>;
+  series: number[];
+}
+
+export interface MarketingChannelModel {
+  id: MarketingChannelId;
+  /** First column header — also names the module. */
+  label: string;
+  /** Collapsed summary row label, e.g. "Ads · all campaigns". */
+  summaryLabel: string;
+  /** Caption shown above the breakdown once expanded. */
+  breakdownTitle: string;
+  /** First column header inside the breakdown. */
+  breakdownLabel: string;
+  columns: MarketingColumn[];
+  /** Breakdown columns — may add ones the summary row has no value for. */
+  breakdownColumns: MarketingColumn[];
+  summary: MarketingRow;
+  rows: MarketingRow[];
+  attributedTickets: number;
+  attributedRevenue: number;
+}
+
+const MARKETING_SHARES: Record<MarketingChannelId, number> = {
+  email: 0.22,
+  ads: 0.34,
+  web: 0.44,
+};
+
+const AD_PLATFORMS = ["Google", "Meta", "TikTok"];
+const AD_SCOPES = ["Event", "Category"];
+const WEB_POSITIONS = ["Featured", "Home page", "Category", "Listings", "EDP", "Other"];
+const EMAIL_AUDIENCES: { label: string; threshold: "Low" | "Medium" | "High" }[] = [
+  { label: "Ohio State", threshold: "Low" },
+  { label: "Iowa", threshold: "Low" },
+  { label: "NCAAF", threshold: "Medium" },
+  { label: "Sports", threshold: "High" },
+  { label: "New users", threshold: "Low" },
+];
+
+/**
+ * Email audiences overlap — one person can sit in several — so the collapsed
+ * "unique" summary is deliberately below the sum of the audience rows. Ads and
+ * Web rows are disjoint, so those summaries are exact sums.
+ */
+const EMAIL_UNIQUE_FACTOR = 0.54;
+
+function splitShares(rng: () => number, total: number, parts: number): number[] {
+  const weights = Array.from({ length: parts }, () => 0.6 + rng() * 0.8);
+  const sum = weights.reduce((s, w) => s + w, 0);
+  const out: number[] = [];
+  let allocated = 0;
+  for (let i = 0; i < parts; i += 1) {
+    const value = i === parts - 1 ? total - allocated : Math.round((weights[i] / sum) * total);
+    out.push(Math.max(0, value));
+    allocated += value;
+  }
+  return out;
+}
+
+/** Large counts read better abbreviated; the breakdown's smaller ones don't. */
+function formatCount(n: number): string {
+  return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : Math.round(n).toLocaleString();
+}
+
+function pct(part: number, whole: number, digits = 1): string {
+  if (whole <= 0) return "—";
+  return `${((part / whole) * 100).toFixed(digits)}%`;
+}
+
+function money2(n: number): string {
+  return `$${n.toFixed(2)}`;
+}
+
+function sum<T>(rows: T[], pick: (row: T) => number): number {
+  return rows.reduce((total, row) => total + pick(row), 0);
+}
+
+export function generateMarketingChannels(event: ReportingEventInput): MarketingChannelModel[] {
+  const kpis = deriveKpis(event);
+  const rng = mulberry32(hashString(`${event.id}:marketing`));
+  const avgPrice = weightedAvgPrice(event);
+  // Anchor on the event's own reported revenue rather than the seat-group
+  // inventory count — the two are on different scales, and attributed revenue
+  // has to reconcile with the figure the pricing views show for this event.
+  const totalRevenue = Math.max(avgPrice, kpis.currentRevenue);
+  const totalSold = Math.max(1, Math.round(totalRevenue / avgPrice));
+
+  const ticketsFor = (id: MarketingChannelId) =>
+    Math.max(AD_PLATFORMS.length * AD_SCOPES.length, Math.round(totalSold * MARKETING_SHARES[id]));
+
+  // --- Ads ---------------------------------------------------------------
+  const adCampaigns = AD_PLATFORMS.flatMap((platform) =>
+    AD_SCOPES.map((scope) => `${platform} · ${scope}`),
+  );
+  const adTickets = ticketsFor("ads");
+  const adRowTickets = splitShares(rng, adTickets, adCampaigns.length);
+
+  // Every rate is derived from the raw counts below, so CTR/CPC/CPM reconcile
+  // with their own row and the totals reconcile with the rows.
+  const adRaw = adCampaigns.map((label, i) => {
+    const tickets = adRowTickets[i];
+    const revenue = Math.round(tickets * avgPrice * (0.9 + rng() * 0.25));
+    const clicks = Math.max(1, Math.round(tickets * (16 + rng() * 10)));
+    const impressions = Math.round(clicks * (45 + rng() * 35));
+    // Budget is set against a return target, so spend stays a sensible
+    // fraction of attributed revenue. Deriving it from clicks instead makes
+    // ROAS a function of clicks-per-ticket, which lands structurally below 1x.
+    const spend = Math.round(revenue / (2.2 + rng() * 1.8));
+    const sessions = Math.round(clicks * (0.28 + rng() * 0.14));
+    return {
+      id: `ads-${i}`,
+      label,
+      tickets,
+      clicks,
+      impressions,
+      spend,
+      sessions,
+      revenue,
+    };
+  });
+
+  const adTotals = {
+    spend: sum(adRaw, (r) => r.spend),
+    impressions: sum(adRaw, (r) => r.impressions),
+    clicks: sum(adRaw, (r) => r.clicks),
+    sessions: sum(adRaw, (r) => r.sessions),
+    tickets: sum(adRaw, (r) => r.tickets),
+    revenue: sum(adRaw, (r) => r.revenue),
+  };
+
+  const adColumns: MarketingColumn[] = [
+    { id: "spend", label: "Spend (30d)", numeric: true, spark: true },
+    { id: "impr", label: "Impr.", numeric: true },
+    { id: "clicks", label: "Clicks", numeric: true },
+    { id: "ctr", label: "CTR", numeric: true },
+    { id: "cpc", label: "CPC", numeric: true },
+    { id: "cpm", label: "CPM", numeric: true },
+    { id: "sessions", label: "Funnel sessions", numeric: true },
+    { id: "tickets", label: "Tickets sold", numeric: true },
+    { id: "revenue", label: "Revenue", numeric: true },
+  ];
+
+  const adValues = (d: {
+    spend: number;
+    impressions: number;
+    clicks: number;
+    sessions: number;
+    tickets: number;
+    revenue: number;
+  }) => ({
+    spend: formatUsd(d.spend),
+    impr: formatCount(d.impressions),
+    clicks: formatCount(d.clicks),
+    ctr: pct(d.clicks, d.impressions),
+    cpc: money2(d.spend / Math.max(1, d.clicks)),
+    cpm: money2((d.spend / Math.max(1, d.impressions)) * 1000),
+    sessions: formatCount(d.sessions),
+    tickets: formatCount(d.tickets),
+    revenue: formatUsd(d.revenue),
+  });
+
+  const ads: MarketingChannelModel = {
+    id: "ads",
+    label: "Ads",
+    summaryLabel: "Ads · all campaigns",
+    breakdownTitle: "Campaign breakdown",
+    breakdownLabel: "Campaign type · scope",
+    columns: adColumns,
+    breakdownColumns: adColumns,
+    summary: {
+      id: "ads-summary",
+      label: "Ads · all campaigns",
+      values: adValues(adTotals),
+      series: sparkSeries(rng, adTotals.spend / 30, adTotals.spend / 1200, 30),
+    },
+    rows: adRaw.map((r) => ({
+      id: r.id,
+      label: r.label,
+      values: adValues(r),
+      series: sparkSeries(rng, r.spend / 30, r.spend / 1200, 30),
+    })),
+    attributedTickets: adTotals.tickets,
+    attributedRevenue: adTotals.revenue,
+  };
+
+  // --- Web ---------------------------------------------------------------
+  const webTickets = ticketsFor("web");
+  const webRowTickets = splitShares(rng, webTickets, WEB_POSITIONS.length);
+
+  const webRaw = WEB_POSITIONS.map((label, i) => {
+    const tickets = webRowTickets[i];
+    const sessions = Math.max(1, Math.round(tickets * (14 + rng() * 8)));
+    const clicks = Math.round(sessions / (0.45 + rng() * 0.3));
+    const views = Math.round(clicks * (11 + rng() * 7));
+    return {
+      id: `web-${i}`,
+      label,
+      tickets,
+      sessions,
+      clicks,
+      views,
+      revenue: Math.round(tickets * avgPrice * (0.9 + rng() * 0.25)),
+    };
+  });
+
+  const webTotals = {
+    views: sum(webRaw, (r) => r.views),
+    clicks: sum(webRaw, (r) => r.clicks),
+    sessions: sum(webRaw, (r) => r.sessions),
+    tickets: sum(webRaw, (r) => r.tickets),
+    revenue: sum(webRaw, (r) => r.revenue),
+  };
+
+  const webColumns: MarketingColumn[] = [
+    { id: "views", label: "Views (30d)", numeric: true, spark: true },
+    { id: "clicks", label: "Clicks", numeric: true },
+    { id: "sessions", label: "Funnel sessions", numeric: true },
+    { id: "entry", label: "Funnel entry rate", numeric: true },
+    { id: "tickets", label: "Tickets sold", numeric: true },
+    { id: "revenue", label: "Revenue", numeric: true },
+  ];
+
+  const webValues = (d: {
+    views: number;
+    clicks: number;
+    sessions: number;
+    tickets: number;
+    revenue: number;
+  }) => ({
+    views: formatCount(d.views),
+    clicks: formatCount(d.clicks),
+    sessions: formatCount(d.sessions),
+    entry: pct(d.sessions, d.clicks, 0),
+    tickets: formatCount(d.tickets),
+    revenue: formatUsd(d.revenue),
+  });
+
+  const web: MarketingChannelModel = {
+    id: "web",
+    label: "Web",
+    summaryLabel: "Web · all positions",
+    breakdownTitle: "Traffic by position",
+    breakdownLabel: "Position",
+    columns: webColumns,
+    breakdownColumns: webColumns,
+    summary: {
+      id: "web-summary",
+      label: "Web · all positions",
+      values: webValues(webTotals),
+      series: sparkSeries(rng, webTotals.views / 30, webTotals.views / 1500, 30),
+    },
+    rows: webRaw.map((r) => ({
+      id: r.id,
+      label: r.label,
+      values: webValues(r),
+      series: sparkSeries(rng, r.views / 30, r.views / 1500, 30),
+    })),
+    attributedTickets: webTotals.tickets,
+    attributedRevenue: webTotals.revenue,
+  };
+
+  // --- Email -------------------------------------------------------------
+  const emailTickets = ticketsFor("email");
+  // Audience rows are counted per-audience, so they sum above the unique total.
+  const emailRowTickets = splitShares(
+    rng,
+    Math.round(emailTickets / EMAIL_UNIQUE_FACTOR),
+    EMAIL_AUDIENCES.length,
+  );
+
+  const emailRaw = EMAIL_AUDIENCES.map((audience, i) => {
+    const tickets = emailRowTickets[i];
+    const entries = Math.max(1, Math.round(tickets * (2.2 + rng() * 1.6)));
+    const clicks = Math.round(entries * (1.8 + rng() * 1.4));
+    const opens = Math.round(clicks * (3.4 + rng() * 2.2));
+    const sends = Math.round(opens * (2.6 + rng() * 1.4));
+    return {
+      id: `email-${i}`,
+      label: audience.label,
+      threshold: audience.threshold,
+      sends,
+      opens,
+      clicks,
+      entries,
+      tickets,
+      revenue: Math.round(tickets * avgPrice * (0.9 + rng() * 0.25)),
+      newUsers: Math.round(10 + rng() * 32),
+    };
+  });
+
+  const emailRowTotals = {
+    sends: sum(emailRaw, (r) => r.sends),
+    opens: sum(emailRaw, (r) => r.opens),
+    clicks: sum(emailRaw, (r) => r.clicks),
+    entries: sum(emailRaw, (r) => r.entries),
+    tickets: sum(emailRaw, (r) => r.tickets),
+    revenue: sum(emailRaw, (r) => r.revenue),
+  };
+  const emailTotals = {
+    sends: Math.round(emailRowTotals.sends * EMAIL_UNIQUE_FACTOR),
+    opens: Math.round(emailRowTotals.opens * EMAIL_UNIQUE_FACTOR),
+    clicks: Math.round(emailRowTotals.clicks * EMAIL_UNIQUE_FACTOR),
+    entries: Math.round(emailRowTotals.entries * EMAIL_UNIQUE_FACTOR),
+    tickets: Math.round(emailRowTotals.tickets * EMAIL_UNIQUE_FACTOR),
+    revenue: Math.round(emailRowTotals.revenue * EMAIL_UNIQUE_FACTOR),
+    // Share of reach that had never bought before, weighted by sends.
+    newUsers: Math.round(
+      sum(emailRaw, (r) => r.newUsers * r.sends) / Math.max(1, emailRowTotals.sends),
+    ),
+  };
+
+  const emailColumns: MarketingColumn[] = [
+    { id: "sends", label: "Sends (30d)", numeric: true, spark: true },
+    { id: "opens", label: "Opens", numeric: true },
+    { id: "clicks", label: "Clicks", numeric: true },
+    { id: "entries", label: "Funnel entry", numeric: true },
+    { id: "tickets", label: "Tickets sold", numeric: true },
+    { id: "revenue", label: "Revenue", numeric: true },
+    { id: "newUsers", label: "% new users", numeric: true },
+  ];
+
+  const emailValues = (d: {
+    sends: number;
+    opens: number;
+    clicks: number;
+    entries: number;
+    tickets: number;
+    revenue: number;
+    newUsers: number;
+  }) => ({
+    sends: formatCount(d.sends),
+    opens: formatCount(d.opens),
+    clicks: formatCount(d.clicks),
+    entries: formatCount(d.entries),
+    tickets: formatCount(d.tickets),
+    revenue: formatUsd(d.revenue),
+    newUsers: `${d.newUsers}%`,
+  });
+
+  const email: MarketingChannelModel = {
+    id: "email",
+    label: "Email",
+    summaryLabel: "Email · all (unique)",
+    breakdownTitle: "Audience breakdown (not unique)",
+    breakdownLabel: "Audience",
+    columns: emailColumns,
+    // Threshold is an audience attribute, so it exists only in the breakdown.
+    breakdownColumns: [{ id: "threshold", label: "Threshold" }, ...emailColumns],
+    summary: {
+      id: "email-summary",
+      label: "Email · all (unique)",
+      values: emailValues(emailTotals),
+      series: sparkSeries(rng, emailTotals.sends / 30, emailTotals.sends / 900, 30),
+    },
+    rows: emailRaw.map((r) => ({
+      id: r.id,
+      label: r.label,
+      values: { threshold: r.threshold, ...emailValues(r) },
+      series: sparkSeries(rng, r.sends / 30, r.sends / 900, 30),
+    })),
+    attributedTickets: emailTotals.tickets,
+    attributedRevenue: emailTotals.revenue,
+  };
+
+  return [ads, web, email];
 }

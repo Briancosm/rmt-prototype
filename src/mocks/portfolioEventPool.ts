@@ -124,8 +124,13 @@ const BANDS: Band[] = [
   { health: [78, 96], soldPct: [74, 97], funnelVsExp: [5,   24],  fcrVsExp: [8,   26], attention: false },
 ];
 
-// 28 events: 4 critical, 7 warning, 9 monitor, 8 on-track
-const BAND_SEQ = [0,0,0,0, 1,1,1,1,1,1,1, 2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3];
+// 28 events: 4 critical, 7 warning, 9 monitor, 8 on-track.
+//
+// Interleaved rather than grouped, because the event date is also derived from
+// the index — a sorted sequence puts every struggling event in the past and
+// leaves every upcoming event healthy, which no watchlist can ever surface.
+// Same distribution, spread across the calendar.
+const BAND_SEQ = [2,3,1,2,0,3,2,1,3,2,1,0,3,2,1,2,3,0,2,1,3,2,0,1,3,2,1,3];
 
 // Category sequence: 10 Sports, 12 Film, 6 Film+Live
 const CAT_SEQ = [

@@ -6,6 +6,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  BarChart3,
   Check,
   ChevronDown,
   Clock,
@@ -1776,27 +1777,6 @@ function venueSalesBreakdown(
   };
 }
 
-function formatSignedPercent(value: number | null): string {
-  if (value === null) {
-    return "--";
-  }
-
-  const absoluteValue = Math.abs(value);
-  const formattedValue = Number.isInteger(absoluteValue)
-    ? String(absoluteValue)
-    : absoluteValue.toFixed(1).replace(/\.0$/, "");
-
-  if (value > 0) {
-    return `+${formattedValue}%`;
-  }
-
-  if (value < 0) {
-    return `-${formattedValue}%`;
-  }
-
-  return `${formattedValue}%`;
-}
-
 function formatCycleComplete(daysOnSale: number | null, totalWindowDays: number | null): string {
   if (daysOnSale === null || totalWindowDays === null || totalWindowDays <= 0) {
     return "--";
@@ -2114,18 +2094,52 @@ const recommendationObjectivePillStyles: Record<RecommendationObjective, string>
 // clock marks that these recompute every hourly refresh cycle rather than
 // being live actuals; kept on the header only, never the cell value or the
 // hover-overlay contents, so the data itself still reads as plain text.
-function ProjectedMetricHeaderLabel({ label }: { label: string }) {
+// Reliable hover explanation for a column header, in place of the native
+// `title` attribute — browsers delay that ~1s and require the cursor to sit
+// perfectly still, which made it effectively invisible in practice. Renders
+// through the same HoverOverlay portal already used for cell-level tooltips,
+// with no visible change to the header label itself until hovered.
+function HeaderTooltip({
+  explanation,
+  center = false,
+  children,
+}: {
+  explanation: string;
+  center?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <span
-      className="inline-flex items-center justify-center gap-1"
-      title="Projected — recalculates every refresh cycle"
+    <HoverOverlay
+      className={cn(
+        "flex h-full w-full items-center",
+        center ? "justify-center" : "justify-start",
+      )}
+      align={center ? "center" : "start"}
+      contentClassName="w-max max-w-[260px] p-2.5"
+      content={<p className="text-xs text-foreground">{explanation}</p>}
     >
-      {label}
-      <Clock
-        className="h-3 w-3 text-muted-foreground/70"
-        aria-hidden="true"
-      />
-    </span>
+      {children}
+    </HoverOverlay>
+  );
+}
+
+function ProjectedMetricHeaderLabel({
+  label,
+  title = "Projected — recalculates every refresh cycle",
+}: {
+  label: string;
+  title?: string;
+}) {
+  return (
+    <HeaderTooltip explanation={title} center>
+      <span className="inline-flex items-center justify-center gap-1">
+        {label}
+        <Clock
+          className="h-3 w-3 text-muted-foreground/70"
+          aria-hidden="true"
+        />
+      </span>
+    </HeaderTooltip>
   );
 }
 
@@ -2236,6 +2250,135 @@ function SellThroughBar({ pct, compact = false }: { pct: number | null; compact?
           style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
         />
       </div>
+    </div>
+  );
+}
+
+// Bullet-style bar for Top of Funnel. The filled portion is actual entries and
+// the tick marks where they were expected to land, so the gap between the two
+// reads as ahead/behind pace at a glance.
+//
+// The track is expected × TOF_TRACK_HEADROOM rather than each row's own max, so
+// the tick lands on the same x-position in every row and the column can be
+// scanned vertically — short bars fall left of a common line, long ones cross
+// it. The headroom leaves space for overperformance to show as real overshoot.
+const TOF_TRACK_HEADROOM = 1.25;
+
+// Net revenue tracks are scaled to the projection so the tick sits at a fixed
+// x-position (1 / 1.25 = 80%) in every row, making "how much of the projection
+// is booked" comparable down the column.
+const REVENUE_TRACK_HEADROOM = 1.25;
+
+function TofTrendBar({
+  tof,
+  expected,
+  vsExpectedPct,
+}: {
+  tof: number;
+  expected: number | null;
+  vsExpectedPct: number | null;
+}) {
+  const isAhead = expected === null || tof >= expected;
+  const scale = expected !== null ? expected * TOF_TRACK_HEADROOM : tof;
+  const actualPct = scale > 0 ? clamp((tof / scale) * 100, 0, 100) : 0;
+  const expectedPct =
+    expected !== null && scale > 0 ? clamp((expected / scale) * 100, 0, 100) : null;
+
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between gap-1">
+        <span className="tabular-nums">{formatWholeNumber(tof)}</span>
+        {vsExpectedPct !== null && (
+          <span
+            className={cn(
+              "shrink-0 text-[10px] font-semibold tabular-nums",
+              isAhead ? "text-success" : "text-destructive",
+            )}
+          >
+            {vsExpectedPct > 0 ? "+" : ""}
+            {vsExpectedPct}%
+          </span>
+        )}
+      </div>
+      <div className="relative mt-1 h-1.5 rounded-full bg-muted-foreground/20">
+        <div
+          className={cn(
+            "absolute inset-y-0 left-0 rounded-full",
+            expected === null ? "bg-muted-foreground/50" : isAhead ? "bg-success" : "bg-destructive",
+          )}
+          style={{ width: `${actualPct}%` }}
+        />
+        {expectedPct !== null && (
+          <div
+            className="absolute -bottom-0.5 -top-0.5 w-px bg-foreground/70"
+            style={{ left: `${expectedPct}%` }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Combined net revenue cell: booked revenue to date and the projected close,
+ * on one track. Same grammar as TofTrendBar — fill is now, tick is target.
+ *
+ * Both values are dollars against the same event, so unlike the sell-through
+ * percentages they genuinely share an axis and the fill can be read against
+ * the tick directly.
+ *
+ * The track is projected x REVENUE_TRACK_HEADROOM rather than each row's own
+ * max, so the tick lands on the same x-position in every row and the column
+ * can be scanned vertically for how much of the projection is already booked.
+ *
+ * The two numbers keep their own hover overlays (revenue splits by channel,
+ * projection splits by objective), so they are passed in already wrapped.
+ */
+function NetRevenueProjectionBar({
+  netRevenue,
+  projectedNetRevenue,
+  actualNode,
+  projectedNode,
+}: {
+  netRevenue: number | null;
+  projectedNetRevenue: number | null;
+  actualNode: ReactNode;
+  projectedNode: ReactNode;
+}) {
+  const scale =
+    projectedNetRevenue !== null && projectedNetRevenue > 0
+      ? projectedNetRevenue * REVENUE_TRACK_HEADROOM
+      : netRevenue;
+
+  const actualPct =
+    netRevenue !== null && scale !== null && scale > 0
+      ? clamp((netRevenue / scale) * 100, 0, 100)
+      : null;
+  const projectedPct =
+    projectedNetRevenue !== null && scale !== null && scale > 0
+      ? clamp((projectedNetRevenue / scale) * 100, 0, 100)
+      : null;
+
+  return (
+    <div className="w-full">
+      <div className="flex items-baseline justify-between gap-1.5 tabular-nums">
+        <span className="whitespace-nowrap">{actualNode}</span>
+        <span className="shrink-0 whitespace-nowrap">{projectedNode}</span>
+      </div>
+      {actualPct !== null && (
+        <div className="relative mt-1 h-1.5 rounded-full bg-muted-foreground/20">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-primary"
+            style={{ width: `${actualPct}%` }}
+          />
+          {projectedPct !== null && (
+            <div
+              className="absolute -bottom-0.5 -top-0.5 w-px bg-foreground/70"
+              style={{ left: `${projectedPct}%` }}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -3523,22 +3666,6 @@ interface ReportingDiscountRow {
   endLabel: string;
 }
 
-interface ReportingYieldRow {
-  id: string;
-  ticketsSold: number;
-  sellThroughPct: number;
-  yield: number;
-  grossYield: number;
-}
-
-interface ComparablePaceRow {
-  id: string;
-  phase: string;
-  ticketsSold: number;
-  soldPct: number;
-  compYield: number;
-}
-
 interface EventHealthTrendPoint {
   id: string;
   label: string;
@@ -3661,34 +3788,6 @@ const fallbackReportingPricingRows: ReportingPricingRow[] = [
     ticketsLeft: 39,
     yield: 151,
   },
-];
-
-const reportingYieldRows: ReportingYieldRow[] = [
-  { id: "y-1", ticketsSold: 58, sellThroughPct: 100, yield: 250, grossYield: 250 },
-  { id: "y-2", ticketsSold: 44, sellThroughPct: 39, yield: 207, grossYield: 207 },
-  { id: "y-3", ticketsSold: 18, sellThroughPct: 36, yield: 250, grossYield: 250 },
-  { id: "y-4", ticketsSold: 32, sellThroughPct: 100, yield: 226, grossYield: 226 },
-  { id: "y-5", ticketsSold: 20, sellThroughPct: 56, yield: 217, grossYield: 217 },
-  { id: "y-6", ticketsSold: 49, sellThroughPct: 75, yield: 160, grossYield: 162 },
-  { id: "y-7", ticketsSold: 4, sellThroughPct: 50, yield: 191, grossYield: 191 },
-  { id: "y-8", ticketsSold: 18, sellThroughPct: 16, yield: 159, grossYield: 159 },
-  { id: "y-9", ticketsSold: 54, sellThroughPct: 6, yield: 84, grossYield: 84 },
-];
-
-const comparablePaceRows: ComparablePaceRow[] = [
-  { id: "c-0", phase: "Presale", ticketsSold: 0, soldPct: 0, compYield: 0 },
-  { id: "c-1", phase: "0%", ticketsSold: 19, soldPct: 6, compYield: 83 },
-  { id: "c-2", phase: "10%", ticketsSold: 38, soldPct: 11, compYield: 78 },
-  { id: "c-3", phase: "20%", ticketsSold: 79, soldPct: 23, compYield: 81 },
-  { id: "c-4", phase: "30%", ticketsSold: 100, soldPct: 30, compYield: 79 },
-  { id: "c-5", phase: "40%", ticketsSold: 122, soldPct: 36, compYield: 74 },
-  { id: "c-6", phase: "50%", ticketsSold: 275, soldPct: 82, compYield: 75 },
-  { id: "c-7", phase: "60%", ticketsSold: 280, soldPct: 84, compYield: 75 },
-  { id: "c-8", phase: "70%", ticketsSold: 290, soldPct: 87, compYield: 77 },
-  { id: "c-9", phase: "80%", ticketsSold: 290, soldPct: 87, compYield: 77 },
-  { id: "c-10", phase: "90%", ticketsSold: 290, soldPct: 87, compYield: 77 },
-  { id: "c-11", phase: "100%", ticketsSold: 290, soldPct: 87, compYield: 77 },
-  { id: "c-12", phase: "Post-Event", ticketsSold: 290, soldPct: 87, compYield: 77 },
 ];
 
 const baseEventHealthTrend: EventHealthTrendPoint[] = [
@@ -4452,48 +4551,7 @@ function EventReportingDashboard({
     [event, pricingRows],
   );
 
-  const yieldTotals = useMemo(() => {
-    const totals = reportingYieldRows.reduce(
-      (accumulator, row) => {
-        return {
-          ticketsSold: accumulator.ticketsSold + row.ticketsSold,
-          sellThroughPct: accumulator.sellThroughPct + row.sellThroughPct,
-          yield: accumulator.yield + row.yield,
-          grossYield: accumulator.grossYield + row.grossYield,
-        };
-      },
-      {
-        ticketsSold: 0,
-        sellThroughPct: 0,
-        yield: 0,
-        grossYield: 0,
-      },
-    );
-
-    return {
-      ticketsSold: totals.ticketsSold,
-      sellThroughPct: Math.round(totals.sellThroughPct / reportingYieldRows.length),
-      yield: Math.round(totals.yield / reportingYieldRows.length),
-      grossYield: Math.round(totals.grossYield / reportingYieldRows.length),
-    };
-  }, []);
-
   const startTimeLabel = event ? formatCompactDateTime(event.startTimeValue) : "--";
-  const tosTimeLabel = event ? formatCompactDateTime(event.startTimeValue - 7 * 24 * 60 * 60 * 1000) : "--";
-  const daysRemainingLabel = event?.daysRemaining ?? "--";
-  const daysInMarketLabel = event?.daysInMarket ?? "--";
-  const salesWindowLabel = event?.salesWindowDays ?? "--";
-  const salesWindowPassedPct =
-    event?.daysInMarket !== null &&
-    event?.daysInMarket !== undefined &&
-    event?.salesWindowDays !== null &&
-    event?.salesWindowDays !== undefined
-      ? clamp(Math.round((event.daysInMarket / Math.max(1, event.salesWindowDays)) * 100), 0, 100)
-      : event?.daysRemaining === null || event?.daysRemaining === undefined
-        ? 0
-        : clamp(Math.round(((28 - event.daysRemaining) / 28) * 100), 0, 100);
-  const salesWindowPassedLabel =
-    event?.status === "Unpublished" ? "--" : `${salesWindowPassedPct}%`;
 
   const eventHealthTrend = useMemo(
     () => buildEventHealthTrend(event),
@@ -5021,6 +5079,251 @@ function EventReportingDashboard({
     );
   }
 
+  const performanceChart = (
+    <div className="rounded-lg border bg-background p-4 sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="font-heading text-base font-semibold">
+            {activePerformanceMetricConfig.title}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {activePerformanceMetricConfig.description}
+          </p>
+        </div>
+
+        <div className="grid min-w-[260px] gap-2 sm:grid-cols-3">
+          <div className="rounded-lg border bg-secondary/25 px-3 py-2">
+            <p className="text-[11px] font-medium text-muted-foreground">
+              {activePerformanceMetricConfig.actualLabel}
+            </p>
+            <p className="mt-1 text-lg font-semibold">
+              {activePerformanceMetricConfig.formatTooltip(
+                activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.actual ?? 0,
+              )}
+            </p>
+          </div>
+          <div className="rounded-lg border bg-secondary/25 px-3 py-2">
+            <p className="text-[11px] font-medium text-muted-foreground">
+              {activePerformanceMetricConfig.expectedLabel}
+            </p>
+            <p className="mt-1 text-lg font-semibold">
+              {activePerformanceMetricConfig.formatTooltip(
+                activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.expected ?? 0,
+              )}
+            </p>
+          </div>
+          <div className="rounded-lg border bg-secondary/25 px-3 py-2">
+            <p className="text-[11px] font-medium text-muted-foreground">
+              Variance
+            </p>
+            <p
+              className={cn(
+                "mt-1 text-lg font-semibold",
+                (activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.actual ?? 0) -
+                  (activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.expected ?? 0) >=
+                0
+                  ? "text-success"
+                  : "text-destructive",
+              )}
+            >
+              {activePerformanceMetricConfig.formatVariance(
+                activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.actual ?? 0,
+                activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.expected ?? 0,
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 inline-flex flex-wrap rounded-lg border bg-secondary/35 p-1">
+        {[
+          { value: "revenue" as const, label: "Revenue" },
+          { value: "funnel-entries" as const, label: "Funnel Entries" },
+          { value: "funnel-completion" as const, label: "Funnel Completion" },
+          { value: "sold" as const, label: "%" },
+          { value: "roas" as const, label: "ROAS" },
+        ].map((metric) => (
+          <Button
+            key={metric.value}
+            variant={activePerformanceMetric === metric.value ? "default" : "ghost"}
+            size="sm"
+            className="h-9 px-4"
+            onClick={() => {
+              setActivePerformanceMetric(metric.value);
+              setHoveredPerformanceMetricPointId(null);
+            }}
+          >
+            {metric.label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="mt-4 overflow-x-auto">
+        <svg
+          viewBox={`0 0 ${activePerformanceTrendChart.width} ${activePerformanceTrendChart.height}`}
+          className="h-[290px] w-full"
+          role="img"
+          aria-label={`${activePerformanceMetricConfig.title} over time chart`}
+          onMouseLeave={() => setHoveredPerformanceMetricPointId(null)}
+        >
+          <defs>
+            <linearGradient id="performance-metric-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={activePerformanceMetricConfig.areaColor} stopOpacity="0.26" />
+              <stop offset="100%" stopColor={activePerformanceMetricConfig.areaColor} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+          {activePerformanceTrendChart.yTicks.map((tick) => {
+            const y =
+              activePerformanceTrendChart.top +
+              ((activePerformanceTrendChart.yMax - tick) / activePerformanceTrendChart.yMax) *
+                (activePerformanceTrendChart.height -
+                  activePerformanceTrendChart.top -
+                  activePerformanceTrendChart.bottom);
+            return (
+              <g key={`perf-tick-${tick}`}>
+                <line
+                  x1={activePerformanceTrendChart.left}
+                  y1={y}
+                  x2={activePerformanceTrendChart.width - activePerformanceTrendChart.right}
+                  y2={y}
+                  stroke="hsl(var(--border))"
+                  strokeWidth={1}
+                />
+                <text
+                  x={36}
+                  y={y + 4}
+                  textAnchor="end"
+                  fontSize={9}
+                  fill="hsl(var(--muted-foreground))"
+                >
+                  {activePerformanceMetricConfig.formatAxis(tick)}
+                </text>
+              </g>
+            );
+          })}
+          <path d={activePerformanceTrendChart.areaPath} fill="url(#performance-metric-fill)" />
+          <path
+            d={activePerformanceTrendChart.expectedPath}
+            fill="none"
+            stroke="hsl(var(--warning))"
+            strokeDasharray="6 4"
+            strokeWidth={2}
+          />
+          <path
+            d={activePerformanceTrendChart.actualPath}
+            fill="none"
+            stroke={activePerformanceMetricConfig.actualStroke}
+            strokeWidth={3}
+          />
+          {activePerformanceTrendChart.points.map((point) => {
+            const isHovered = hoveredPerformanceMetricPointId === point.id;
+            return (
+              <g key={`perf-point-${point.id}`}>
+                <circle
+                  cx={point.x}
+                  cy={point.actualY}
+                  r={isHovered ? 5.2 : 3.8}
+                  fill={activePerformanceMetricConfig.actualStroke}
+                  stroke={isHovered ? "hsl(var(--card))" : "none"}
+                  strokeWidth={isHovered ? 2 : 0}
+                  onMouseEnter={() => setHoveredPerformanceMetricPointId(point.id)}
+                  onFocus={() => setHoveredPerformanceMetricPointId(point.id)}
+                  onBlur={() => setHoveredPerformanceMetricPointId(null)}
+                  tabIndex={0}
+                />
+                <text
+                  x={point.x}
+                  y={activePerformanceTrendChart.baseY + 16}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fill="hsl(var(--muted-foreground))"
+                >
+                  {point.label}
+                </text>
+              </g>
+            );
+          })}
+          {hoveredPerformanceMetricPoint && (
+            <SvgPointTooltip
+              x={hoveredPerformanceMetricPoint.x}
+              y={hoveredPerformanceMetricPoint.actualY}
+              width={activePerformanceTrendChart.width}
+              height={activePerformanceTrendChart.height}
+              left={activePerformanceTrendChart.left}
+              right={activePerformanceTrendChart.right}
+              top={activePerformanceTrendChart.top}
+              bottom={activePerformanceTrendChart.bottom}
+              title={`Period: ${hoveredPerformanceMetricPoint.label}`}
+              lines={[
+                `${activePerformanceMetricConfig.actualLabel}: ${activePerformanceMetricConfig.formatTooltip(hoveredPerformanceMetricPoint.actual)}`,
+                `${activePerformanceMetricConfig.expectedLabel}: ${activePerformanceMetricConfig.formatTooltip(hoveredPerformanceMetricPoint.expected)}`,
+                `Variance: ${activePerformanceMetricConfig.formatVariance(
+                  hoveredPerformanceMetricPoint.actual,
+                  hoveredPerformanceMetricPoint.expected,
+                )}`,
+              ]}
+            />
+          )}
+        </svg>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-2">
+          <span
+            className="h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: activePerformanceMetricConfig.actualStroke }}
+          />
+          {activePerformanceMetricConfig.actualLabel}
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="h-0 w-6 border-t-2 border-dashed border-warning" />
+          {activePerformanceMetricConfig.expectedLabel}
+        </span>
+      </div>
+    </div>
+  );
+
+  const marketingSite = (
+    <div className="rounded-lg border bg-background p-4 sm:p-5">
+      <h3 className="font-heading text-xl font-semibold">Marketing + Site Metrics</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        ROAS, funnel traffic, and completion against comparable benchmarks.
+      </p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <div className="rounded border bg-secondary/20 p-2">
+          <p className="text-[11px] font-medium text-muted-foreground">Ad Spend</p>
+          <p className="mt-1 font-semibold">{formatCurrency(eventPerformance?.adSpend ?? 0)}</p>
+        </div>
+        <div className="rounded border bg-secondary/20 p-2">
+          <p className="text-[11px] font-medium text-muted-foreground">ROAS / Comp</p>
+          <p className="mt-1 font-semibold">
+            {eventPerformance?.roas ?? 0}x / {eventPerformance?.compRoas ?? 0}x
+          </p>
+        </div>
+        <div className="rounded border bg-secondary/20 p-2">
+          <p className="text-[11px] font-medium text-muted-foreground">Funnel Entries</p>
+          <p className="mt-1 font-semibold">
+            {formatCompactNumber(eventPerformance?.funnelEntries ?? 0)}
+            <span className="ml-1 text-xs text-muted-foreground">
+              (Comp {formatCompactNumber(eventPerformance?.compFunnelEntries ?? 0)})
+            </span>
+          </p>
+        </div>
+        <div className="rounded border bg-secondary/20 p-2">
+          <p className="text-[11px] font-medium text-muted-foreground">
+            Funnel Completion
+          </p>
+          <p className="mt-1 font-semibold">
+            {eventPerformance?.funnelCompletion ?? 0}%
+            <span className="ml-1 text-xs text-muted-foreground">
+              (Comp {eventPerformance?.compFunnelCompletion ?? 0}%)
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background px-4 py-6 pb-28 sm:px-6 lg:px-8">
       <main className="mx-auto max-w-[1450px] rounded-lg border bg-card p-4 shadow-sm sm:p-6 lg:p-8">
@@ -5054,780 +5357,14 @@ function EventReportingDashboard({
             </Button>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-foreground/90">
-            <span className="rounded bg-secondary px-2 py-0.5 font-medium">{abbreviateCity(event.venueName)}</span>
-            <span className="rounded bg-accent px-2 py-0.5 font-medium text-accent-foreground">
-              {event.eventCategory}
-            </span>
-            <span>
-              <span className="font-semibold">Weekday:</span> {event.weekdayLabel}
-            </span>
-            <span>
-              <span className="font-semibold">Start:</span> {startTimeLabel}
-            </span>
-            <span>
-              <span className="font-semibold">Local Time:</span> {event.localStartTimeLabel} {getVenueTimezone(event.venueName)}
-            </span>
-            <span>
-              <span className="font-semibold">On-Sale Date:</span> {event.onSaleDateLabel}
-            </span>
-            <span>
-              <span className="font-semibold">Days In-Market:</span> {daysInMarketLabel}
-            </span>
-            <span>
-              <span className="font-semibold">Sales Window:</span> {salesWindowLabel}
-            </span>
-            <span>
-              <span className="font-semibold">TOS Time:</span> {tosTimeLabel}
-            </span>
-            <span>
-              <span className="font-semibold">Days Remaining:</span> {daysRemainingLabel}
-            </span>
-            <span>
-              <span className="font-semibold">Sales Window Passed:</span> {salesWindowPassedLabel}
-            </span>
-          </div>
         </header>
 
         <div className="mt-6">
-          <h2 className="mb-3 font-heading text-base font-semibold">Summary</h2>
-          <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                Health Score
-              </p>
-              <p className="mt-1 text-xl font-semibold">{eventPerformance?.healthScore ?? "--"}</p>
-            </div>
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">Risk Flag</p>
-              <div className="mt-1">
-                <Badge variant={riskBadgeVariant}>{eventPerformance?.riskFlag ?? "--"}</Badge>
-              </div>
-            </div>
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                {eventPerformance?.mode === "active"
-                  ? "Net Revenue (Right Now)"
-                  : "Projected Net Revenue (Current)"}
-              </p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatCurrency(eventPerformance?.currentNetRevenue ?? 0)}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                {eventPerformance?.mode === "active"
-                  ? "Expected Revenue (Right Now)"
-                  : "Projected Net Revenue (Recommended)"}
-              </p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatCurrency(
-                  eventPerformance?.mode === "active"
-                    ? eventPerformance?.expectedRevenueNow ?? 0
-                    : eventPerformance?.projectedNetRevenueRecommended ?? 0,
-                )}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                {eventPerformance?.mode === "active"
-                  ? "Sellthrough (Actual / Expected)"
-                  : "Projected Sellthrough (Rec / Baseline)"}
-              </p>
-              <p className="mt-1 text-xl font-semibold">
-                {eventPerformance?.actualSellthroughNow ?? 0}% / {eventPerformance?.expectedSellthroughNow ?? 0}%
-              </p>
-            </div>
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                Revenue Vs Expected
-              </p>
-              <p
-                className={cn(
-                  "mt-1 text-xl font-semibold",
-                  (eventPerformance?.revenueVsExpectedPct ?? 0) >= 0 ? "text-success" : "text-destructive",
-                )}
-              >
-                {(eventPerformance?.revenueVsExpectedPct ?? 0) >= 0 ? "+" : ""}
-                {eventPerformance?.revenueVsExpectedPct ?? 0}%
-              </p>
-            </div>
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                Sellthrough Vs Expected
-              </p>
-              <p
-                className={cn(
-                  "mt-1 text-xl font-semibold",
-                  (eventPerformance?.sellthroughVsExpectedPts ?? 0) >= 0 ? "text-success" : "text-destructive",
-                )}
-              >
-                {(eventPerformance?.sellthroughVsExpectedPts ?? 0) >= 0 ? "+" : ""}
-                {eventPerformance?.sellthroughVsExpectedPts ?? 0} pts
-              </p>
-            </div>
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                Pricing Opportunity
-              </p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatCurrency(eventPerformance?.pricingOpportunity ?? 0)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Score: {eventPerformance?.pricingOpportunityScore ?? 0}
-              </p>
-            </div>
-            <div className="rounded-lg border bg-secondary/20 p-3">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                Left-To-Go Tickets
-              </p>
-              <p className="mt-1 text-xl font-semibold">
-                {formatCompactNumber(eventPerformance?.ticketsRemainingTotal ?? 0)}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Sold: {formatCompactNumber(eventPerformance?.ticketsSoldTotal ?? 0)}
-              </p>
-            </div>
-          </section>
-
-          <section className="mb-6 rounded-lg border bg-background p-4 sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="font-heading text-base font-semibold">Recommended Actions</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Current versus recommended seat-group pricing and offer rate, with projected revenue impact.
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                {recommendationInsightSummary.model && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Refreshed {recommendationInsightSummary.model.refreshedLabel}
-                  </span>
-                )}
-                {SHOW_RECOMMENDATION_INSIGHTS && recommendationInsightSummary.count > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                    Model confidence
-                    <ConfidenceBadge
-                      score={recommendationInsightSummary.weightedConfidence}
-                      tier={confidenceTierFor(recommendationInsightSummary.weightedConfidence)}
-                    />
-                  </span>
-                )}
-                <p className="text-xs font-medium text-muted-foreground">
-                  Use the footer to review and stage these recommendations.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-              <div className="overflow-x-auto rounded-lg border">
-                <Table className="min-w-[560px]">
-                  <TableHeader className="bg-secondary/35">
-                    <TableRow className="hover:bg-secondary/35">
-                      <TableHead>Action</TableHead>
-                      <TableHead className="text-right">Current</TableHead>
-                      <TableHead className="text-right">Recommended</TableHead>
-                      <TableHead className="text-right">Delta</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>Seat Group Price</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(currentSeatGroupPrice)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(recommendedSeatGroupPrice)}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "text-right font-semibold",
-                          recommendedSeatGroupPrice - currentSeatGroupPrice >= 0
-                            ? "text-success"
-                            : "text-warning",
-                        )}
-                      >
-                        {(recommendedSeatGroupPrice - currentSeatGroupPrice) >= 0 ? "+" : ""}
-                        {formatCurrency(recommendedSeatGroupPrice - currentSeatGroupPrice)}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Offer Rate</TableCell>
-                      <TableCell className="text-right font-medium">{discountRate}%</TableCell>
-                      <TableCell className="text-right font-medium">{recommendedDiscountRate}%</TableCell>
-                      <TableCell
-                        className={cn(
-                          "text-right font-semibold",
-                          recommendedDiscountRate - discountRate <= 0 ? "text-success" : "text-warning",
-                        )}
-                      >
-                        {recommendedDiscountRate - discountRate >= 0 ? "+" : ""}
-                        {roundTo(recommendedDiscountRate - discountRate, 1)} pts
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Marketing Spend</TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(marketingSpend)}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {formatCurrency(recommendedMarketingSpend)}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "text-right font-semibold",
-                          recommendedMarketingSpend - marketingSpend <= 0
-                            ? "text-success"
-                            : "text-warning",
-                        )}
-                      >
-                        {(recommendedMarketingSpend - marketingSpend) >= 0 ? "+" : ""}
-                        {formatCurrency(recommendedMarketingSpend - marketingSpend)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="rounded-lg border p-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Revenue Projection
-                </p>
-                <div className="mt-3 overflow-x-auto">
-                  <svg
-                    viewBox={`0 0 ${actionProjectionChart.width} ${actionProjectionChart.height}`}
-                    className="h-[220px] w-full"
-                    role="img"
-                    aria-label="Current versus expected revenue projections"
-                    onMouseLeave={() => setHoveredActionPointId(null)}
-                  >
-                    {actionProjectionChart.yTicks.map((tick) => {
-                      const y =
-                        actionProjectionChart.top +
-                        ((actionProjectionChart.yMax - tick) / actionProjectionChart.yMax) *
-                          (actionProjectionChart.height -
-                            actionProjectionChart.top -
-                            actionProjectionChart.bottom);
-                      return (
-                        <g key={`action-tick-${tick}`}>
-                          <line
-                            x1={actionProjectionChart.left}
-                            y1={y}
-                            x2={actionProjectionChart.width - actionProjectionChart.right}
-                            y2={y}
-                            stroke="hsl(var(--border))"
-                            strokeWidth={1}
-                          />
-                          <text
-                            x={36}
-                            y={y + 4}
-                            textAnchor="end"
-                            fontSize={9}
-                            fill="hsl(var(--muted-foreground))"
-                          >
-                            {`$${formatCompactNumber(tick)}`}
-                          </text>
-                        </g>
-                      );
-                    })}
-                    <path
-                      d={actionProjectionChart.actualPath}
-                      fill="none"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={3}
-                    />
-                    <path
-                      d={actionProjectionChart.expectedPath}
-                      fill="none"
-                      stroke="hsl(var(--success))"
-                      strokeWidth={3}
-                    />
-                    {actionProjectionChart.points.map((point) => {
-                      const isHovered = hoveredActionPointId === point.id;
-                      return (
-                        <g key={`action-point-${point.id}`}>
-                          <circle
-                            cx={point.x}
-                            cy={point.actualY}
-                            r={isHovered ? 5 : 3.3}
-                            fill="hsl(var(--primary))"
-                            stroke={isHovered ? "hsl(var(--card))" : "none"}
-                            strokeWidth={isHovered ? 2 : 0}
-                            onMouseEnter={() => setHoveredActionPointId(point.id)}
-                            onFocus={() => setHoveredActionPointId(point.id)}
-                            onBlur={() => setHoveredActionPointId(null)}
-                            tabIndex={0}
-                          />
-                          <circle
-                            cx={point.x}
-                            cy={point.expectedY}
-                            r={isHovered ? 5 : 3.3}
-                            fill="hsl(var(--success))"
-                            stroke={isHovered ? "hsl(var(--card))" : "none"}
-                            strokeWidth={isHovered ? 2 : 0}
-                            onMouseEnter={() => setHoveredActionPointId(point.id)}
-                            onFocus={() => setHoveredActionPointId(point.id)}
-                            onBlur={() => setHoveredActionPointId(null)}
-                            tabIndex={0}
-                          />
-                          <text
-                            x={point.x}
-                            y={actionProjectionChart.baseY + 16}
-                            textAnchor="middle"
-                            fontSize={9}
-                            fill="hsl(var(--muted-foreground))"
-                          >
-                            {point.label}
-                          </text>
-                        </g>
-                      );
-                    })}
-                    {hoveredActionPoint && (
-                      <SvgPointTooltip
-                        x={hoveredActionPoint.x}
-                        y={Math.min(hoveredActionPoint.actualY, hoveredActionPoint.expectedY)}
-                        width={actionProjectionChart.width}
-                        height={actionProjectionChart.height}
-                        left={actionProjectionChart.left}
-                        right={actionProjectionChart.right}
-                        top={actionProjectionChart.top}
-                        bottom={actionProjectionChart.bottom}
-                        title={`Period: ${hoveredActionPoint.label}`}
-                        lines={[
-                          `Current Revenue: ${formatCurrency(Math.round(hoveredActionPoint.actual))}`,
-                          `Expected Revenue: ${formatCurrency(Math.round(hoveredActionPoint.expected))}`,
-                          `Delta: ${hoveredActionPoint.expected - hoveredActionPoint.actual >= 0 ? "+" : ""}${formatCurrency(Math.round(hoveredActionPoint.expected - hoveredActionPoint.actual))}`,
-                        ]}
-                      />
-                    )}
-                  </svg>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-primary" />
-                    Current Revenue
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-success" />
-                    Expected Revenue
-                  </span>
-                </div>
-                <div className="mt-3 rounded border bg-secondary/20 px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">Projected net impact:</span>{" "}
-                  <span
-                    className={cn(
-                      "font-semibold",
-                      netProjectionDelta >= 0 ? "text-success" : "text-destructive",
-                    )}
-                  >
-                    {netProjectionDelta >= 0 ? "+" : ""}
-                    {formatCurrency(netProjectionDelta)}
-                  </span>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    80% interval: {netProjectionDelta - netProjectionHalfWidth >= 0 ? "+" : ""}
-                    {formatCurrency(netProjectionDelta - netProjectionHalfWidth)} to{" "}
-                    {netProjectionDelta + netProjectionHalfWidth >= 0 ? "+" : ""}
-                    {formatCurrency(netProjectionDelta + netProjectionHalfWidth)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {recommendationInsightSummary.model && (
-              <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">
-                {recommendationInsightSummary.model.comparablesUsed} comparable events · backtest
-                error (MAPE) {recommendationInsightSummary.model.backtestMapePct}%
-                {SHOW_RECOMMENDATION_INSIGHTS && (
-                  <>
-                    {" "}· {recommendationInsightSummary.tierCounts.high} high /{" "}
-                    {recommendationInsightSummary.tierCounts.medium} medium /{" "}
-                    {recommendationInsightSummary.tierCounts.low} low confidence recommendations
-                  </>
-                )}
-              </p>
-            )}
-          </section>
-
-          <section className="space-y-6">
-              <div className="rounded-lg border bg-background p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h2 className="font-heading text-base font-semibold">
-                      {activePerformanceMetricConfig.title}
-                    </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {activePerformanceMetricConfig.description}
-                    </p>
-                  </div>
-
-                  <div className="grid min-w-[260px] gap-2 sm:grid-cols-3">
-                    <div className="rounded-lg border bg-secondary/25 px-3 py-2">
-                      <p className="text-[11px] font-medium text-muted-foreground">
-                        {activePerformanceMetricConfig.actualLabel}
-                      </p>
-                      <p className="mt-1 text-lg font-semibold">
-                        {activePerformanceMetricConfig.formatTooltip(
-                          activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.actual ?? 0,
-                        )}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border bg-secondary/25 px-3 py-2">
-                      <p className="text-[11px] font-medium text-muted-foreground">
-                        {activePerformanceMetricConfig.expectedLabel}
-                      </p>
-                      <p className="mt-1 text-lg font-semibold">
-                        {activePerformanceMetricConfig.formatTooltip(
-                          activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.expected ?? 0,
-                        )}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border bg-secondary/25 px-3 py-2">
-                      <p className="text-[11px] font-medium text-muted-foreground">
-                        Variance
-                      </p>
-                      <p
-                        className={cn(
-                          "mt-1 text-lg font-semibold",
-                          (activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.actual ?? 0) -
-                            (activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.expected ?? 0) >=
-                          0
-                            ? "text-success"
-                            : "text-destructive",
-                        )}
-                      >
-                        {activePerformanceMetricConfig.formatVariance(
-                          activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.actual ?? 0,
-                          activePerformanceMetricConfig.series[activePerformanceMetricConfig.series.length - 1]?.expected ?? 0,
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 inline-flex flex-wrap rounded-lg border bg-secondary/35 p-1">
-                  {[
-                    { value: "revenue" as const, label: "Revenue" },
-                    { value: "funnel-entries" as const, label: "Funnel Entries" },
-                    { value: "funnel-completion" as const, label: "Funnel Completion" },
-                    { value: "sold" as const, label: "%" },
-                    { value: "roas" as const, label: "ROAS" },
-                  ].map((metric) => (
-                    <Button
-                      key={metric.value}
-                      variant={activePerformanceMetric === metric.value ? "default" : "ghost"}
-                      size="sm"
-                      className="h-9 px-4"
-                      onClick={() => {
-                        setActivePerformanceMetric(metric.value);
-                        setHoveredPerformanceMetricPointId(null);
-                      }}
-                    >
-                      {metric.label}
-                    </Button>
-                  ))}
-                </div>
-
-                <div className="mt-4 overflow-x-auto">
-                  <svg
-                    viewBox={`0 0 ${activePerformanceTrendChart.width} ${activePerformanceTrendChart.height}`}
-                    className="h-[290px] w-full"
-                    role="img"
-                    aria-label={`${activePerformanceMetricConfig.title} over time chart`}
-                    onMouseLeave={() => setHoveredPerformanceMetricPointId(null)}
-                  >
-                    <defs>
-                      <linearGradient id="performance-metric-fill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={activePerformanceMetricConfig.areaColor} stopOpacity="0.26" />
-                        <stop offset="100%" stopColor={activePerformanceMetricConfig.areaColor} stopOpacity="0.02" />
-                      </linearGradient>
-                    </defs>
-                    {activePerformanceTrendChart.yTicks.map((tick) => {
-                      const y =
-                        activePerformanceTrendChart.top +
-                        ((activePerformanceTrendChart.yMax - tick) / activePerformanceTrendChart.yMax) *
-                          (activePerformanceTrendChart.height -
-                            activePerformanceTrendChart.top -
-                            activePerformanceTrendChart.bottom);
-                      return (
-                        <g key={`perf-tick-${tick}`}>
-                          <line
-                            x1={activePerformanceTrendChart.left}
-                            y1={y}
-                            x2={activePerformanceTrendChart.width - activePerformanceTrendChart.right}
-                            y2={y}
-                            stroke="hsl(var(--border))"
-                            strokeWidth={1}
-                          />
-                          <text
-                            x={36}
-                            y={y + 4}
-                            textAnchor="end"
-                            fontSize={9}
-                            fill="hsl(var(--muted-foreground))"
-                          >
-                            {activePerformanceMetricConfig.formatAxis(tick)}
-                          </text>
-                        </g>
-                      );
-                    })}
-                    <path d={activePerformanceTrendChart.areaPath} fill="url(#performance-metric-fill)" />
-                    <path
-                      d={activePerformanceTrendChart.expectedPath}
-                      fill="none"
-                      stroke="hsl(var(--warning))"
-                      strokeDasharray="6 4"
-                      strokeWidth={2}
-                    />
-                    <path
-                      d={activePerformanceTrendChart.actualPath}
-                      fill="none"
-                      stroke={activePerformanceMetricConfig.actualStroke}
-                      strokeWidth={3}
-                    />
-                    {activePerformanceTrendChart.points.map((point) => {
-                      const isHovered = hoveredPerformanceMetricPointId === point.id;
-                      return (
-                        <g key={`perf-point-${point.id}`}>
-                          <circle
-                            cx={point.x}
-                            cy={point.actualY}
-                            r={isHovered ? 5.2 : 3.8}
-                            fill={activePerformanceMetricConfig.actualStroke}
-                            stroke={isHovered ? "hsl(var(--card))" : "none"}
-                            strokeWidth={isHovered ? 2 : 0}
-                            onMouseEnter={() => setHoveredPerformanceMetricPointId(point.id)}
-                            onFocus={() => setHoveredPerformanceMetricPointId(point.id)}
-                            onBlur={() => setHoveredPerformanceMetricPointId(null)}
-                            tabIndex={0}
-                          />
-                          <text
-                            x={point.x}
-                            y={activePerformanceTrendChart.baseY + 16}
-                            textAnchor="middle"
-                            fontSize={9}
-                            fill="hsl(var(--muted-foreground))"
-                          >
-                            {point.label}
-                          </text>
-                        </g>
-                      );
-                    })}
-                    {hoveredPerformanceMetricPoint && (
-                      <SvgPointTooltip
-                        x={hoveredPerformanceMetricPoint.x}
-                        y={hoveredPerformanceMetricPoint.actualY}
-                        width={activePerformanceTrendChart.width}
-                        height={activePerformanceTrendChart.height}
-                        left={activePerformanceTrendChart.left}
-                        right={activePerformanceTrendChart.right}
-                        top={activePerformanceTrendChart.top}
-                        bottom={activePerformanceTrendChart.bottom}
-                        title={`Period: ${hoveredPerformanceMetricPoint.label}`}
-                        lines={[
-                          `${activePerformanceMetricConfig.actualLabel}: ${activePerformanceMetricConfig.formatTooltip(hoveredPerformanceMetricPoint.actual)}`,
-                          `${activePerformanceMetricConfig.expectedLabel}: ${activePerformanceMetricConfig.formatTooltip(hoveredPerformanceMetricPoint.expected)}`,
-                          `Variance: ${activePerformanceMetricConfig.formatVariance(
-                            hoveredPerformanceMetricPoint.actual,
-                            hoveredPerformanceMetricPoint.expected,
-                          )}`,
-                        ]}
-                      />
-                    )}
-                  </svg>
-                </div>
-
-                <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-2">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: activePerformanceMetricConfig.actualStroke }}
-                    />
-                    {activePerformanceMetricConfig.actualLabel}
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-0 w-6 border-t-2 border-dashed border-warning" />
-                    {activePerformanceMetricConfig.expectedLabel}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-
-              <div className="rounded-lg border bg-background p-4 sm:p-5">
-                <h3 className="font-heading text-xl font-semibold">Dome vs Hall Summary</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Gross and net breakout across venue areas.
-                </p>
-
-                <div className="mt-4 space-y-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-foreground">Dome Net</span>
-                      <span>{formatCurrency(eventPerformance?.domeNetRevenue ?? 0)}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted">
-                      <div
-                        className="h-2 rounded-full bg-primary"
-                        style={{
-                          width: `${clamp(
-                            ((eventPerformance?.domeNetRevenue ?? 0) /
-                              Math.max(
-                                1,
-                                (eventPerformance?.domeNetRevenue ?? 0) +
-                                  (eventPerformance?.hallNetRevenue ?? 0),
-                              )) *
-                              100,
-                            0,
-                            100,
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-foreground">Hall Net</span>
-                      <span>{formatCurrency(eventPerformance?.hallNetRevenue ?? 0)}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted">
-                      <div
-                        className="h-2 rounded-full bg-success"
-                        style={{
-                          width: `${clamp(
-                            ((eventPerformance?.hallNetRevenue ?? 0) /
-                              Math.max(
-                                1,
-                                (eventPerformance?.domeNetRevenue ?? 0) +
-                                  (eventPerformance?.hallNetRevenue ?? 0),
-                              )) *
-                              100,
-                            0,
-                            100,
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] font-medium text-muted-foreground">Dome Gross</p>
-                    <p className="mt-1 font-semibold">{formatCurrency(eventPerformance?.domeGrossRevenue ?? 0)}</p>
-                  </div>
-                  <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] font-medium text-muted-foreground">Hall Gross</p>
-                    <p className="mt-1 font-semibold">{formatCurrency(eventPerformance?.hallGrossRevenue ?? 0)}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border bg-background p-4 sm:p-5">
-                <h3 className="font-heading text-xl font-semibold">Marketing + Site Metrics</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  ROAS, funnel traffic, and completion against comparable benchmarks.
-                </p>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] font-medium text-muted-foreground">Ad Spend</p>
-                    <p className="mt-1 font-semibold">{formatCurrency(eventPerformance?.adSpend ?? 0)}</p>
-                  </div>
-                  <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] font-medium text-muted-foreground">ROAS / Comp</p>
-                    <p className="mt-1 font-semibold">
-                      {eventPerformance?.roas ?? 0}x / {eventPerformance?.compRoas ?? 0}x
-                    </p>
-                  </div>
-                  <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] font-medium text-muted-foreground">Funnel Entries</p>
-                    <p className="mt-1 font-semibold">
-                      {formatCompactNumber(eventPerformance?.funnelEntries ?? 0)}
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        (Comp {formatCompactNumber(eventPerformance?.compFunnelEntries ?? 0)})
-                      </span>
-                    </p>
-                  </div>
-                  <div className="rounded border bg-secondary/20 p-2">
-                    <p className="text-[11px] font-medium text-muted-foreground">
-                      Funnel Completion
-                    </p>
-                    <p className="mt-1 font-semibold">
-                      {eventPerformance?.funnelCompletion ?? 0}%
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        (Comp {eventPerformance?.compFunnelCompletion ?? 0}%)
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border bg-background">
-                <div className="overflow-x-auto">
-                  <Table className="min-w-[520px]">
-                    <TableHeader className="bg-secondary/40">
-                      <TableRow className="hover:bg-secondary/40">
-                        <TableHead>Tickets Sold</TableHead>
-                        <TableHead>Seat Group S..</TableHead>
-                        <TableHead>Yield</TableHead>
-                        <TableHead>Gross Yield</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {reportingYieldRows.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell>{row.ticketsSold}</TableCell>
-                          <TableCell><SellThroughBar pct={row.sellThroughPct} /></TableCell>
-                          <TableCell>{formatDollarInteger(row.yield)}</TableCell>
-                          <TableCell>{formatDollarInteger(row.grossYield)}</TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow className="bg-secondary/30 font-semibold">
-                        <TableCell>{yieldTotals.ticketsSold}</TableCell>
-                        <TableCell><SellThroughBar pct={yieldTotals.sellThroughPct} /></TableCell>
-                        <TableCell>{formatDollarInteger(yieldTotals.yield)}</TableCell>
-                        <TableCell>{formatDollarInteger(yieldTotals.grossYield)}</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-
-              <div className="rounded-lg border bg-background">
-                <div className="border-b bg-secondary/30 px-4 py-3 text-center">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Comparable Event
-                  </p>
-                  <p className="mt-1 text-sm text-foreground">
-                    2025 Concacaf Gold Cup: USA vs. Mexico - 7/6/25 @ 4P
-                  </p>
-                </div>
-                <div className="overflow-x-auto">
-                  <Table className="min-w-[520px]">
-                    <TableHeader className="bg-secondary/40">
-                      <TableRow className="hover:bg-secondary/40">
-                        <TableHead>Presale</TableHead>
-                        <TableHead>Tickets Sold</TableHead>
-                        <TableHead>%</TableHead>
-                        <TableHead>Comp Yield</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {comparablePaceRows.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell>{row.phase}</TableCell>
-                          <TableCell>{row.ticketsSold}</TableCell>
-                          <TableCell>{row.soldPct}%</TableCell>
-                          <TableCell>{formatDollarInteger(row.compYield)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-              </div>
-            </section>
-            <EventReportingDeepDive event={event} />
+            <EventReportingDeepDive
+              event={event}
+              performanceSlot={performanceChart}
+              demandSlot={marketingSite}
+            />
 
 
         </div>
@@ -7985,14 +7522,7 @@ export default function App() {
         </header>
 
         {primaryTab === "reporting" && (
-          <PortfolioReportingPage
-            events={[...draftEvents, ...generatedPortfolioEvents]}
-            onViewEvent={(id) => {
-              if (draftEvents.some((e) => e.id === id)) {
-                navigate(`/reporting/${encodeURIComponent(id)}`);
-              }
-            }}
-          />
+          <PortfolioReportingPage events={[...draftEvents, ...generatedPortfolioEvents]} />
         )}
 
         <section className={cn("overflow-hidden rounded-lg border bg-card/95 shadow-sm", primaryTab === "reporting" && "hidden")}>
@@ -8254,29 +7784,24 @@ export default function App() {
                 <col style={{width: '80px'}} />
                 <col style={{width: '80px'}} />
                 <col style={{width: '130px'}} />
+                <col style={{width: '108px'}} />
+                <col style={{width: '70px'}} />
+                <col style={{width: '160px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '95px'}} />
+                <col style={{width: '110px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '95px'}} />
+                <col style={{width: '85px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '95px'}} />
                 <col style={{width: '150px'}} />
                 <col style={{width: '130px'}} />
                 <col style={{width: '105px'}} />
-                <col style={{width: '115px'}} />
-                <col style={{width: '115px'}} />
-                <col style={{width: '110px'}} />
-                <col style={{width: '95px'}} />
-                <col style={{width: '85px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '130px'}} />
-                <col style={{width: '95px'}} />
-                <col style={{width: '110px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '130px'}} />
-                <col style={{width: '95px'}} />
-                <col style={{width: '85px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '130px'}} />
-                <col style={{width: '95px'}} />
-                <col style={{width: '90px'}} />
-                <col style={{width: '70px'}} />
-                <col style={{width: '100px'}} />
-                <col style={{width: '80px'}} />
+                <col style={{width: '170px'}} />
                 <col style={{width: '50px'}} />
               </colgroup>
               <TableHeader className="bg-card sticky top-0 z-10 shadow-sm">
@@ -8286,19 +7811,11 @@ export default function App() {
                     className="h-5 border-r border-b border-border/60 bg-secondary/20 p-0 sticky left-0 z-30"
                   />
                   <TableHead
-                    colSpan={1}
+                    colSpan={3}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0"
                   />
                   <TableHead
-                    colSpan={5}
-                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
-                  >
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold text-muted-foreground/60">Sales and Revenue</span>
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    colSpan={6}
+                    colSpan={4}
                     className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
                   >
                     <div className="flex h-full items-center justify-center">
@@ -8321,11 +7838,15 @@ export default function App() {
                       <span className="text-[9px] font-semibold text-muted-foreground/60">GA</span>
                     </div>
                   </TableHead>
-                  <TableHead colSpan={5} className="h-5 border-b border-border/60 bg-secondary/20 p-0 text-center">
+                  <TableHead
+                    colSpan={4}
+                    className="h-5 border-x border-b border-border/60 bg-secondary/20 p-0 text-center"
+                  >
                     <div className="flex h-full items-center justify-center">
-                      <span className="text-[9px] font-semibold text-muted-foreground/60">Funnel Performance</span>
+                      <span className="text-[9px] font-semibold text-muted-foreground/60">Sales and Revenue</span>
                     </div>
                   </TableHead>
+                  <TableHead colSpan={1} className="h-5 border-b border-border/60 bg-secondary/20 p-0" />
                 </TableRow>
                 <TableRow className="hover:bg-card bg-card">
                   <TableHead className="w-[400px] whitespace-nowrap sticky left-0 z-30 bg-card">
@@ -8354,56 +7875,69 @@ export default function App() {
                     Health
                   </TableHead>
                   <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[480px] z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]">Tier</TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap border-x border-border/70 text-center">
-                    D / W / %
+                  <TableHead className="w-[130px] whitespace-nowrap border-l border-border/70 text-center">
+                    <HeaderTooltip explanation="Days on sale / Total sales window / % of window elapsed" center>
+                      D / W / %
+                    </HeaderTooltip>
                   </TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap border-l border-border/70 text-center">
-                    Sold / Avail. / Held
+                  <TableHead className="w-[108px] whitespace-nowrap">
+                    <HeaderTooltip explanation="Top of Funnel">TOF</HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[70px] whitespace-nowrap border-r border-border/70">
+                    <HeaderTooltip explanation="Funnel Conversion Rate">FCR</HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[160px] whitespace-nowrap border-l border-border/70 text-center">
+                    <HeaderTooltip explanation="Seat group price range / Average Ticket Price" center>
+                      Price Range / ATP
+                    </HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap text-center">
+                    <HeaderTooltip explanation="Sold / Available / Held" center>Sold / Avail. / Held</HeaderTooltip>
                   </TableHead>
                   <TableHead className="w-[130px] whitespace-nowrap text-center">
-                    %Sold / Tot. %Sold
+                    <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>%Sold / Tot. %Sold</HeaderTooltip>
                   </TableHead>
-                  <TableHead className="w-[105px] whitespace-nowrap text-center">
-                    <ProjectedMetricHeaderLabel label="Proj. % Sold" />
-                  </TableHead>
-                  <TableHead className="w-[115px] whitespace-nowrap text-center">
-                    Net Revenue
-                  </TableHead>
-                  <TableHead className="w-[115px] whitespace-nowrap border-r border-border/70 text-center">
-                    <ProjectedMetricHeaderLabel label="Proj. Net Rev" />
-                  </TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">Price Range</TableHead>
-                  <TableHead className="w-[95px] whitespace-nowrap text-center">Sample Price</TableHead>
-                  <TableHead className="w-[85px] whitespace-nowrap text-center">ATP</TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
                   <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
                     <ProjectedMetricHeaderLabel label="Proj. % Sold" />
                   </TableHead>
                   <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">Price Range</TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap text-center">
+                    <HeaderTooltip explanation="Sold / Available / Held" center>Sold / Avail. / Held</HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">
+                    <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>%Sold / Tot. %Sold</HeaderTooltip>
+                  </TableHead>
                   <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
                     <ProjectedMetricHeaderLabel label="Proj. % Sold" />
                   </TableHead>
                   <TableHead className="w-[85px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap text-center">
+                    <HeaderTooltip explanation="Sold / Available / Held" center>Sold / Avail. / Held</HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">
+                    <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>%Sold / Tot. %Sold</HeaderTooltip>
+                  </TableHead>
                   <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
                     <ProjectedMetricHeaderLabel label="Proj. % Sold" />
                   </TableHead>
-                  <TableHead className="w-[90px] whitespace-nowrap">TOF</TableHead>
-                  <TableHead className="w-[70px] whitespace-nowrap">FCR</TableHead>
-                  <TableHead className="w-[100px] whitespace-nowrap">FCR vs. Exp.</TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => onSort("status")}
-                      className="group flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      {sortLabelMap.status}
-                      {sortIconForKey("status")}
-                    </button>
+                  <TableHead className="w-[150px] whitespace-nowrap border-l border-border/70 text-center">
+                    <HeaderTooltip explanation="Sold / Available / Held" center>
+                      Sold / Avail. / Held
+                    </HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">
+                    <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>
+                      %Sold / Tot. %Sold
+                    </HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[105px] whitespace-nowrap text-center">
+                    <ProjectedMetricHeaderLabel label="Proj. % Sold" />
+                  </TableHead>
+                  <TableHead className="w-[170px] whitespace-nowrap border-r border-border/70 text-center">
+                    <ProjectedMetricHeaderLabel
+                      label="Net Rev. / Proj."
+                      title="Net Revenue booked to date / Projected Net Revenue — only the projection recalculates every refresh cycle"
+                    />
                   </TableHead>
                   <TableHead className="w-[70px]" />
                 </TableRow>
@@ -8466,6 +8000,14 @@ export default function App() {
                   const totalPctSold = percentOf(salesRollup.sold, totalInventory);
                   const projPctSold = percentOf(salesRollup.projected, salesRollup.avail);
                   const cycleCompletePct = percentOf(event.daysInMarket, event.salesWindowDays);
+                  // funnelEntriesVsExpectedPct is actual-vs-expected, so the
+                  // expected entry count is recoverable from the actual.
+                  const expectedTof =
+                    event.tof !== null &&
+                    event.funnelEntriesVsExpectedPct !== null &&
+                    event.funnelEntriesVsExpectedPct > -100
+                      ? Math.round(event.tof / (1 + event.funnelEntriesVsExpectedPct / 100))
+                      : null;
                   const objectiveProjPctSold = objectiveProjectedSellThroughPct(
                     event.id,
                     projPctSold,
@@ -8475,9 +8017,6 @@ export default function App() {
                     event.projectedNetRevenue,
                     event.optimizedProjected,
                   );
-                  const sampleSeatGroup = event.seatGroups[0] as SeatGroup | undefined;
-                  const samplePrice =
-                    sampleSeatGroup !== undefined ? sampleSeatGroup.currentPrice * tierPriceMultiplier : null;
                   const domeSalesBreakdown = venueSalesBreakdown(
                     event.domeSold,
                     domeAvail,
@@ -8583,6 +8122,22 @@ export default function App() {
                                 )}
                               </div>
                             </div>
+
+                            {/* Lives in the sticky column so the jump to reporting is
+                                reachable at any horizontal scroll position, unlike the
+                                row menu pinned to the far right of a very wide table. */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/reporting/${encodeURIComponent(event.id)}`);
+                              }}
+                              className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                              aria-label={`View reporting for ${event.event}`}
+                              title="View reporting"
+                            >
+                              <BarChart3 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </TableCell>
 
@@ -8624,7 +8179,7 @@ export default function App() {
                           </Select>
                         </TableCell>
 
-                        <TableCell className="whitespace-nowrap border-x border-border/40 text-center tabular-nums">
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center tabular-nums">
                           {event.daysInMarket !== null && event.salesWindowDays !== null ? (
                             <>
                               {event.daysInMarket}
@@ -8639,158 +8194,65 @@ export default function App() {
                             event.daysInMarket ?? "--"
                           )}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center tabular-nums">
-                          {salesRollup.sold === null || salesRollup.avail === null ? (
-                            "--"
-                          ) : (
-                            <>
-                              {formatWholeNumber(salesRollup.sold)}
-                              <span className="text-muted-foreground/60"> / </span>
-                              {formatWholeNumber(salesRollup.avail)}
-                              <span className="text-muted-foreground/60"> / </span>
-                              <span className="text-muted-foreground">
-                                {formatWholeNumber(heldTickets)}
-                              </span>
-                            </>
-                          )}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-center tabular-nums">
-                          {pctSold === null ? (
-                            "--"
-                          ) : (
-                            <>
-                              {formatPercent(pctSold)}
-                              <span className="text-muted-foreground/60"> / </span>
-                              <span className="text-muted-foreground">
-                                {formatPercent(totalPctSold)}
-                              </span>
-                            </>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center tabular-nums">
-                          {projPctSold === null ? (
+                        <TableCell className="pr-4">
+                          {event.tof === null ? (
                             "--"
                           ) : (
                             <HoverOverlay
-                              className="mx-auto"
-                              align="center"
-                              contentClassName="w-[230px] p-3"
+                              className="w-full"
+                              align="start"
+                              contentClassName="w-[250px] p-3"
                               content={
                                 <>
                                   <p className="mb-2 text-xs font-semibold text-foreground">
-                                    Projected % Sold
+                                    Top of Funnel
                                   </p>
                                   <ul className="space-y-1.5">
                                     <li className="flex items-center justify-between gap-3 text-xs">
-                                      <span className="font-medium text-foreground">Rev. Opt. Proj. % Sold</span>
-                                      <span className="text-muted-foreground">{formatPercent(objectiveProjPctSold.revenue)}</span>
+                                      <span className="font-medium text-foreground">Current entries</span>
+                                      <span className="text-muted-foreground">{formatWholeNumber(event.tof)}</span>
                                     </li>
                                     <li className="flex items-center justify-between gap-3 text-xs">
-                                      <span className="font-medium text-foreground">ST Opt. Proj. % Sold</span>
-                                      <span className="text-muted-foreground">{formatPercent(objectiveProjPctSold.sellThrough)}</span>
+                                      <span className="font-medium text-foreground">Expected entries</span>
+                                      <span className="text-muted-foreground">{formatWholeNumber(expectedTof)}</span>
                                     </li>
+                                    {expectedTof !== null && (
+                                      <li className="mt-1 flex items-center justify-between gap-3 border-t border-border/60 pt-1.5 text-xs">
+                                        <span className="font-medium text-foreground">Variance</span>
+                                        <span
+                                          className={cn(
+                                            "font-semibold",
+                                            event.tof >= expectedTof ? "text-success" : "text-destructive",
+                                          )}
+                                        >
+                                          {event.tof >= expectedTof ? "+" : "−"}
+                                          {formatWholeNumber(Math.abs(event.tof - expectedTof))}
+                                          {event.funnelEntriesVsExpectedPct !== null
+                                            ? ` (${event.funnelEntriesVsExpectedPct > 0 ? "+" : ""}${event.funnelEntriesVsExpectedPct}%)`
+                                            : ""}
+                                        </span>
+                                      </li>
+                                    )}
                                   </ul>
                                 </>
                               }
                             >
-                              <span
-                                tabIndex={0}
-                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
-                              >
-                                {formatPercent(projPctSold)}
-                              </span>
+                              <TofTrendBar
+                                tof={event.tof}
+                                expected={expectedTof}
+                                vsExpectedPct={event.funnelEntriesVsExpectedPct}
+                              />
                             </HoverOverlay>
                           )}
                         </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-center px-5",
-                            event.attention === "underperforming" && "text-destructive",
-                          )}
-                        >
-                          {event.netTicketRevenue === null ? (
-                            "--"
-                          ) : (
-                            <HoverOverlay
-                              className="inline-flex"
-                              align="center"
-                              contentClassName="w-[220px] p-3"
-                              content={
-                                <>
-                                  <p className="mb-2 text-xs font-semibold text-foreground">
-                                    Net Ticket Revenue
-                                  </p>
-                                  <ul className="space-y-1.5">
-                                    <li className="flex items-center justify-between gap-3 text-xs">
-                                      <span className="font-medium text-foreground">Group Sales</span>
-                                      <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.groupSales)}</span>
-                                    </li>
-                                    <li className="flex items-center justify-between gap-3 text-xs">
-                                      <span className="font-medium text-foreground">Consumer</span>
-                                      <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.consumer)}</span>
-                                    </li>
-                                  </ul>
-                                </>
-                              }
-                            >
-                              <span
-                                tabIndex={0}
-                                className={cn(
-                                  "cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none",
-                                  event.attention === "underperforming"
-                                    ? "text-destructive hover:text-destructive focus:text-destructive"
-                                    : "text-foreground hover:text-primary focus:text-primary",
-                                )}
-                              >
-                                {formatCurrency(event.netTicketRevenue)}
-                              </span>
-                            </HoverOverlay>
-                          )}
-                        </TableCell>
-                        <TableCell className="border-r border-border/40 text-center px-5">
-                          {event.projectedNetRevenue === null ? (
-                            "--"
-                          ) : (
-                            <HoverOverlay
-                              className="mx-auto"
-                              align="center"
-                              contentClassName="w-[235px] p-3"
-                              content={
-                                <>
-                                  <p className="mb-2 text-xs font-semibold text-foreground">
-                                    Projected Net Revenue
-                                  </p>
-                                  <ul className="space-y-1.5">
-                                    <li className="flex items-center justify-between gap-3 text-xs">
-                                      <span className="font-medium text-foreground">Rev. Opt. Proj. Net Rev</span>
-                                      <span className="text-muted-foreground">{formatCurrency(objectiveProjNetRev.revenue)}</span>
-                                    </li>
-                                    <li className="flex items-center justify-between gap-3 text-xs">
-                                      <span className="font-medium text-foreground">ST Opt. Proj. Net Rev</span>
-                                      <span className="text-muted-foreground">{formatCurrency(objectiveProjNetRev.sellThrough)}</span>
-                                    </li>
-                                  </ul>
-                                </>
-                              }
-                            >
-                              <span
-                                tabIndex={0}
-                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
-                              >
-                                {formatCurrency(event.projectedNetRevenue)}
-                              </span>
-                            </HoverOverlay>
-                          )}
-                        </TableCell>
+                        <TableCell className="border-r border-border/40">{formatPercent(event.fcrPct)}</TableCell>
 
                         <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
                           {domePriceRange}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-center">
-                          {formatCurrency(samplePrice)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-center">
-                          {event.domeAtp !== null ? formatCurrency(event.domeAtp * tierPriceMultiplier) : "--"}
+                          <span className="text-muted-foreground/60"> / </span>
+                          <span className="text-muted-foreground">
+                            {event.domeAtp !== null ? formatCurrency(event.domeAtp * tierPriceMultiplier) : "--"}
+                          </span>
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-center tabular-nums">
                           {event.domeSold === null || domeAvail === null ? (
@@ -8989,29 +8451,155 @@ export default function App() {
                             </HoverOverlay>
                           )}
                         </TableCell>
-                        <TableCell>{formatWholeNumber(event.tof)}</TableCell>
-                        <TableCell>{formatPercent(event.fcrPct)}</TableCell>
+
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center tabular-nums">
+                          {salesRollup.sold === null || salesRollup.avail === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatWholeNumber(salesRollup.sold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              {formatWholeNumber(salesRollup.avail)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatWholeNumber(heldTickets)}
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                          {pctSold === null ? (
+                            "--"
+                          ) : (
+                            <>
+                              {formatPercent(pctSold)}
+                              <span className="text-muted-foreground/60"> / </span>
+                              <span className="text-muted-foreground">
+                                {formatPercent(totalPctSold)}
+                              </span>
+                            </>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums">
+                          {projPctSold === null ? (
+                            "--"
+                          ) : (
+                            <HoverOverlay
+                              className="mx-auto"
+                              align="center"
+                              contentClassName="w-[230px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Projected % Sold
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Rev. Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(objectiveProjPctSold.revenue)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">ST Opt. Proj. % Sold</span>
+                                      <span className="text-muted-foreground">{formatPercent(objectiveProjPctSold.sellThrough)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
+                              <span
+                                tabIndex={0}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                              >
+                                {formatPercent(projPctSold)}
+                              </span>
+                            </HoverOverlay>
+                          )}
+                        </TableCell>
                         <TableCell
                           className={cn(
-                            "font-semibold",
-                            event.fcrVsExpectedPct === null && "text-muted-foreground",
-                            event.fcrVsExpectedPct !== null && event.fcrVsExpectedPct < 0 && "text-destructive",
-                            event.fcrVsExpectedPct !== null && event.fcrVsExpectedPct > 0 && "text-success",
+                            "border-r border-border/40 text-center px-5",
+                            event.attention === "underperforming" && "text-destructive",
                           )}
                         >
-                          {formatSignedPercent(event.fcrVsExpectedPct)}
-                        </TableCell>
-
-                        <TableCell>
-                          {event.status === "On Sale" ? (
-                            <Badge variant="secondary" className="bg-success/15 text-success">
-                              {event.status}
-                            </Badge>
+                          <NetRevenueProjectionBar
+                            netRevenue={event.netTicketRevenue}
+                            projectedNetRevenue={event.projectedNetRevenue}
+                            actualNode={
+                          event.netTicketRevenue === null ? (
+                            "--"
                           ) : (
-                            <Badge variant="secondary" className="bg-muted text-muted-foreground">
-                              {event.status}
-                            </Badge>
-                          )}
+                            <HoverOverlay
+                              className="inline-flex"
+                              align="center"
+                              contentClassName="w-[220px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Net Ticket Revenue
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Group Sales</span>
+                                      <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.groupSales)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Consumer</span>
+                                      <span className="text-muted-foreground">{formatCurrency(netTicketRevenueBreakdown.consumer)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
+                              <span
+                                tabIndex={0}
+                                className={cn(
+                                  "cursor-help underline decoration-dotted underline-offset-4 transition-colors focus:outline-none",
+                                  event.attention === "underperforming"
+                                    ? "text-destructive hover:text-destructive focus:text-destructive"
+                                    : "text-foreground hover:text-primary focus:text-primary",
+                                )}
+                              >
+                                {formatCurrency(event.netTicketRevenue)}
+                              </span>
+                            </HoverOverlay>
+                          )
+                            }
+                            projectedNode={
+                          event.projectedNetRevenue === null ? (
+                            "--"
+                          ) : (
+                            <HoverOverlay
+                              className="mx-auto"
+                              align="center"
+                              contentClassName="w-[235px] p-3"
+                              content={
+                                <>
+                                  <p className="mb-2 text-xs font-semibold text-foreground">
+                                    Projected Net Revenue
+                                  </p>
+                                  <ul className="space-y-1.5">
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">Rev. Opt. Proj. Net Rev</span>
+                                      <span className="text-muted-foreground">{formatCurrency(objectiveProjNetRev.revenue)}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-3 text-xs">
+                                      <span className="font-medium text-foreground">ST Opt. Proj. Net Rev</span>
+                                      <span className="text-muted-foreground">{formatCurrency(objectiveProjNetRev.sellThrough)}</span>
+                                    </li>
+                                  </ul>
+                                </>
+                              }
+                            >
+                              <span
+                                tabIndex={0}
+                                className="cursor-help underline decoration-dotted underline-offset-4 text-foreground transition-colors hover:text-primary focus:text-primary focus:outline-none"
+                              >
+                                {formatCurrency(event.projectedNetRevenue)}
+                              </span>
+                            </HoverOverlay>
+                          )
+                            }
+                          />
                         </TableCell>
 
                         <TableCell>
@@ -9045,7 +8633,7 @@ export default function App() {
 
                       {isExpanded && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                          <TableCell colSpan={28} className="p-0">
+                          <TableCell colSpan={23} className="p-0">
                             <div className="mx-5 my-4 w-fit overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
                               <div className="flex items-center gap-4 border-b border-border/50 px-4 py-2 bg-secondary/10">
                                 <span className="text-[11px] text-muted-foreground">
@@ -9115,8 +8703,12 @@ export default function App() {
                                         <TableHead className="w-[120px] whitespace-nowrap">Seat Group</TableHead>
                                         <TableHead className="w-[100px] whitespace-nowrap">Original Price</TableHead>
                                         <TableHead className="w-[280px] whitespace-nowrap">Current Price</TableHead>
-                                        <TableHead className="w-[130px] whitespace-nowrap text-center">%Sold / Tot. %Sold</TableHead>
-                                        <TableHead className="w-[150px] whitespace-nowrap text-center">Sold / Avail. / Held</TableHead>
+                                        <TableHead className="w-[130px] whitespace-nowrap text-center">
+                                          <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>%Sold / Tot. %Sold</HeaderTooltip>
+                                        </TableHead>
+                                        <TableHead className="w-[150px] whitespace-nowrap text-center">
+                                          <HeaderTooltip explanation="Sold / Available / Held" center>Sold / Avail. / Held</HeaderTooltip>
+                                        </TableHead>
                                         <TableHead className="w-[105px] whitespace-nowrap text-center">
                                           <ProjectedMetricHeaderLabel label="Proj. % Sold" />
                                         </TableHead>

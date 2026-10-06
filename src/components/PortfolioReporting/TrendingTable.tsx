@@ -403,9 +403,8 @@ export function TrendingTable({ events, roasRows }: TrendingTableProps) {
 
   return (
     <section className="overflow-hidden rounded-lg border bg-card/95 shadow-sm">
-      {/* Header — same style as All Events section */}
       <div className="border-b px-4 py-3 sm:px-6">
-        <p className="text-sm font-semibold text-foreground">Trending by Metric</p>
+        <h3 className="font-heading text-lg font-semibold tracking-tight text-foreground">Trending by Metric</h3>
         <div className="mt-2 flex flex-wrap gap-1">
           {TABS.map((tab) => (
             <button

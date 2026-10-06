@@ -1,4 +1,4 @@
-import { ArrowUpRight, BarChart3, GaugeCircle } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -20,13 +20,11 @@ const RISK_STYLES: Record<RiskFlag, string> = {
 
 interface EventHeaderProps {
   event: ReportingEventInput;
-  onAdjustPricing?: () => void;
   onViewComparables?: () => void;
 }
 
 export function EventHeader({
   event,
-  onAdjustPricing,
   onViewComparables,
 }: EventHeaderProps) {
   const kpis = deriveKpis(event);
@@ -56,10 +54,6 @@ export function EventHeader({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onAdjustPricing} className="gap-1.5">
-            <GaugeCircle className="h-4 w-4" />
-            Adjust Pricing
-          </Button>
           <Button size="sm" variant="outline" onClick={onViewComparables} className="gap-1.5">
             <BarChart3 className="h-4 w-4" />
             View Comparable Events
@@ -88,7 +82,7 @@ export function EventHeader({
       </div>
 
       {/* KPI grid */}
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
         <KpiTile
           label="Health Score"
           value={`${kpis.healthScore}`}
@@ -125,13 +119,6 @@ export function EventHeader({
             { compact: true },
           )}`}
           accent={varianceNegative ? "text-destructive" : "text-success"}
-        />
-        <KpiTile
-          label="Pricing Opportunity"
-          value={formatUsd(kpis.pricingOpportunity, { compact: true })}
-          sub="upside vs current plan"
-          accent="text-primary"
-          icon={<ArrowUpRight className="h-4 w-4 text-primary" />}
         />
       </div>
     </section>

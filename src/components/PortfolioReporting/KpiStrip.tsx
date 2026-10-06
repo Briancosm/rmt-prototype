@@ -1,12 +1,10 @@
-import { useRef } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Minus, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, Minus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { PortfolioKpis } from "./useFilteredEvents";
 
 interface KpiStripProps {
   kpis: PortfolioKpis;
-  onAtRiskClick?: () => void;
 }
 
 function fmtUsd(v: number) {
@@ -23,13 +21,13 @@ function fmtSignedUsd(v: number) {
   return `${sign}${fmtUsd(v)}`;
 }
 
-export function KpiStrip({ kpis, onAtRiskClick }: KpiStripProps) {
+export function KpiStrip({ kpis }: KpiStripProps) {
   const varNeg = kpis.totalVariance < 0;
   const varPos = kpis.totalVariance > 0;
   const soldDelta = kpis.avgSoldPct - kpis.avgExpectedSoldPct;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
       {/* 1. Total Revenue */}
       <KpiCard
         label="Total Revenue"
@@ -85,33 +83,14 @@ export function KpiStrip({ kpis, onAtRiskClick }: KpiStripProps) {
       />
 
       {/* 5. Events At Risk */}
-      <button
-        type="button"
-        onClick={onAtRiskClick}
-        className="rounded-lg border bg-card p-4 shadow-sm text-left transition-colors hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/40"
-        aria-label="View at-risk events"
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] font-medium text-muted-foreground">Events At Risk</p>
-          <AlertTriangle className="h-4 w-4 text-warning" />
-        </div>
-        <p className={cn("mt-1 font-heading text-base font-semibold tabular-nums", kpis.eventsAtRisk > 0 ? "text-warning" : "text-success")}>
-          {kpis.eventsAtRisk}
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {kpis.eventsAtRisk > 0 ? ">10% below expected · click to view" : "No events at risk"}
-        </p>
-      </button>
-
-      {/* 6. Pricing Opportunity */}
       <KpiCard
-        label="Pricing Opportunity"
-        value={fmtUsd(kpis.pricingOpportunity)}
-        accent="text-primary"
-        icon={<TrendingUp className="h-4 w-4 text-primary" />}
+        label="Events At Risk"
+        value={String(kpis.eventsAtRisk)}
+        accent={kpis.eventsAtRisk > 0 ? "text-warning" : "text-success"}
+        icon={<AlertTriangle className="h-4 w-4 text-warning" />}
         sub={
           <span className="text-muted-foreground">
-            across {kpis.pricingOpportunityEventCount} event{kpis.pricingOpportunityEventCount !== 1 ? "s" : ""}
+            {kpis.eventsAtRisk > 0 ? ">10% below expected" : "No events at risk"}
           </span>
         }
       />

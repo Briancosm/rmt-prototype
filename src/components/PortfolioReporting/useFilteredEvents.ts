@@ -93,8 +93,6 @@ export interface PortfolioKpis {
   avgExpectedSoldPct: number;
   eventsOnTrack: number;
   eventsAtRisk: number;
-  pricingOpportunity: number;
-  pricingOpportunityEventCount: number;
   projectedRevenue: number;
 }
 
@@ -111,8 +109,6 @@ export function derivePortfolioKpis(events: PortfolioEvent[]): PortfolioKpis {
       avgExpectedSoldPct: 0,
       eventsOnTrack: 0,
       eventsAtRisk: 0,
-      pricingOpportunity: 0,
-      pricingOpportunityEventCount: 0,
       projectedRevenue: 0,
     };
   }
@@ -137,8 +133,6 @@ export function derivePortfolioKpis(events: PortfolioEvent[]): PortfolioKpis {
 
   let eventsOnTrack = 0;
   let eventsAtRisk = 0;
-  let pricingOpportunity = 0;
-  let pricingOpportunityEventCount = 0;
 
   for (const ev of active) {
     const actual = ev.netTicketRevenue ?? 0;
@@ -147,11 +141,6 @@ export function derivePortfolioKpis(events: PortfolioEvent[]): PortfolioKpis {
     const varPct = (actual - expected) / expected;
     if (Math.abs(varPct) <= 0.05) eventsOnTrack++;
     if (varPct < -0.10) eventsAtRisk++;
-    const upside = (ev.optimizedProjected ?? 0) - (ev.projectedNetRevenue ?? 0);
-    if (upside > 0) {
-      pricingOpportunity += upside;
-      pricingOpportunityEventCount++;
-    }
   }
 
   return {
@@ -164,8 +153,6 @@ export function derivePortfolioKpis(events: PortfolioEvent[]): PortfolioKpis {
     avgExpectedSoldPct,
     eventsOnTrack,
     eventsAtRisk,
-    pricingOpportunity,
-    pricingOpportunityEventCount,
     projectedRevenue: totalExpectedRevenue,
   };
 }

@@ -15,7 +15,7 @@ export function MarketingSiteMetrics({ metrics }: MarketingSiteMetricsProps) {
   return (
     <section className="overflow-hidden rounded-lg border bg-card/95 shadow-sm">
       <div className="border-b px-4 py-3 sm:px-5">
-        <h3 className="text-sm font-semibold text-foreground">Marketing &amp; Site Metrics</h3>
+        <h3 className="font-heading text-lg font-semibold tracking-tight text-foreground">Marketing &amp; Site Metrics</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">Aggregate across filtered events</p>
       </div>
 

@@ -23,14 +23,17 @@ export function FilterBar({ filters, onChange, locations, categories, priceTiers
   const set = <K extends keyof ReportingFilters>(key: K, value: ReportingFilters[K]) =>
     onChange({ ...filters, [key]: value });
 
+  // Compared against the defaults rather than hardcoded "all" — the date range
+  // defaults to a preset, so a literal check would report it as an active
+  // filter on load and Clear could never bring the count back to zero.
   const activeCount = [
-    filters.datePreset !== "all",
+    filters.datePreset !== EMPTY_FILTERS.datePreset,
     filters.locations.length > 0,
     filters.categories.length > 0,
     filters.dayParts.length > 0,
     filters.daysOfWeek.length > 0,
     filters.priceTiers.length > 0,
-    filters.eventStatus !== "all",
+    filters.eventStatus !== EMPTY_FILTERS.eventStatus,
   ].filter(Boolean).length;
 
   return (

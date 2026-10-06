@@ -49,9 +49,9 @@ export function ChannelAttribution({ event }: ChannelAttributionProps) {
       aria-label="Channel and buyer-source attribution"
     >
       <div>
-        <h3 className="font-heading text-lg font-semibold text-foreground">Channel Attribution</h3>
+        <h3 className="font-heading text-lg font-semibold text-foreground">Sales Channels</h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Ticket distribution by buyer source · {model.totalTickets.toLocaleString()} tickets
+          Where tickets were bought · {model.totalTickets.toLocaleString()} tickets
         </p>
       </div>
 
