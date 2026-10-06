@@ -2146,8 +2146,11 @@ function ProjectedMetricHeaderLabel({
 const HEALTH_RING_RADIUS = 16;
 const HEALTH_RING_CIRCUMFERENCE = 2 * Math.PI * HEALTH_RING_RADIUS;
 
-function EventHealthBadge({ score, event }: { score: number | null; event?: EventRecord }) {
-  if (score === null) return <span className="text-muted-foreground text-sm">--</span>;
+/**
+ * The 0-100 score ring. Shared so every score column renders identically —
+ * same thresholds, same arc, same type.
+ */
+function ScoreRing({ score, label }: { score: number; label: string }) {
   const arcColor =
     score >= 76
       ? "hsl(var(--success))"
@@ -2158,13 +2161,13 @@ function EventHealthBadge({ score, event }: { score: number | null; event?: Even
           : "hsl(var(--destructive))";
   const arcLength = (clamp(score, 0, 100) / 100) * HEALTH_RING_CIRCUMFERENCE;
 
-  const ring = (
+  return (
     <svg
       width="34"
       height="34"
       viewBox="0 0 40 40"
       role="img"
-      aria-label={`Event health ${score} of 100`}
+      aria-label={`${label} ${score} of 100`}
     >
       <circle
         cx="20"
@@ -2198,6 +2201,36 @@ function EventHealthBadge({ score, event }: { score: number | null; event?: Even
       </text>
     </svg>
   );
+}
+
+/**
+ * How far the event's marketing is reaching, scored 0-100.
+ *
+ * Placeholder derivation: funnel volume against a 20k reference, nudged by
+ * whether entries are tracking ahead of or behind expectation. Deterministic
+ * from the event's own fields rather than seeded noise, so it moves with the
+ * funnel data instead of drifting independently of it.
+ */
+function deriveReachScore(event: EventRecord): number | null {
+  if (event.tof === null) return null;
+  const volume = clamp((event.tof / 20_000) * 100, 0, 100);
+  const pace = clamp(50 + (event.funnelEntriesVsExpectedPct ?? 0), 0, 100);
+  return Math.round(clamp(volume * 0.7 + pace * 0.3, 0, 100));
+}
+
+function EventReachBadge({ score }: { score: number | null }) {
+  if (score === null) return <span className="text-muted-foreground text-sm">--</span>;
+  return (
+    <span className="inline-flex">
+      <ScoreRing score={score} label="Reach" />
+    </span>
+  );
+}
+
+function EventHealthBadge({ score, event }: { score: number | null; event?: EventRecord }) {
+  if (score === null) return <span className="text-muted-foreground text-sm">--</span>;
+
+  const ring = <ScoreRing score={score} label="Event health" />;
 
   const isUnderperforming = event?.attention === "underperforming";
   if (!isUnderperforming) {
@@ -7783,9 +7816,13 @@ export default function App() {
                 <col style={{width: '400px'}} />
                 <col style={{width: '80px'}} />
                 <col style={{width: '80px'}} />
+                <col style={{width: '80px'}} />
                 <col style={{width: '130px'}} />
                 <col style={{width: '108px'}} />
                 <col style={{width: '70px'}} />
+                <col style={{width: '150px'}} />
+                <col style={{width: '130px'}} />
+                <col style={{width: '95px'}} />
                 <col style={{width: '160px'}} />
                 <col style={{width: '150px'}} />
                 <col style={{width: '130px'}} />
@@ -7797,9 +7834,6 @@ export default function App() {
                 <col style={{width: '85px'}} />
                 <col style={{width: '150px'}} />
                 <col style={{width: '130px'}} />
-                <col style={{width: '95px'}} />
-                <col style={{width: '150px'}} />
-                <col style={{width: '130px'}} />
                 <col style={{width: '105px'}} />
                 <col style={{width: '170px'}} />
                 <col style={{width: '50px'}} />
@@ -7807,7 +7841,7 @@ export default function App() {
               <TableHeader className="bg-card sticky top-0 z-10 shadow-sm">
                 <TableRow className="bg-card hover:bg-card">
                   <TableHead
-                    colSpan={3}
+                    colSpan={4}
                     className="h-5 border-r border-b border-border/60 bg-secondary/20 p-0 sticky left-0 z-30"
                   />
                   <TableHead
@@ -7874,7 +7908,12 @@ export default function App() {
                   <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[400px] z-30 bg-card">
                     Health
                   </TableHead>
-                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[480px] z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]">Tier</TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[480px] z-30 bg-card">
+                    <HeaderTooltip explanation="Reach — how far the event's marketing is reaching, scored out of 100" center>
+                      Reach
+                    </HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[80px] whitespace-nowrap text-center sticky left-[560px] z-30 bg-card shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]">Tier</TableHead>
                   <TableHead className="w-[130px] whitespace-nowrap border-l border-border/70 text-center">
                     <HeaderTooltip explanation="Days on sale / Total sales window / % of window elapsed" center>
                       D / W / %
@@ -7886,40 +7925,40 @@ export default function App() {
                   <TableHead className="w-[70px] whitespace-nowrap border-r border-border/70">
                     <HeaderTooltip explanation="Funnel Conversion Rate">FCR</HeaderTooltip>
                   </TableHead>
-                  <TableHead className="w-[160px] whitespace-nowrap border-l border-border/70 text-center">
+                  <TableHead className="w-[150px] whitespace-nowrap border-l border-border/70 text-center">
+                    <HeaderTooltip explanation="Sold / Available / Held" center>Sold / Avail. / Held</HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[130px] whitespace-nowrap text-center">
+                    <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>%Sold / Tot. %Sold</HeaderTooltip>
+                  </TableHead>
+                  <TableHead className="w-[95px] whitespace-nowrap text-center">
+                    <ProjectedMetricHeaderLabel label="Proj. % Sold" />
+                  </TableHead>
+                  <TableHead className="w-[160px] whitespace-nowrap text-center border-r border-border/70">
                     <HeaderTooltip explanation="Seat group price range / Average Ticket Price" center>
                       Price Range / ATP
                     </HeaderTooltip>
                   </TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap text-center">
+                  <TableHead className="w-[150px] whitespace-nowrap border-l border-border/70 text-center">
                     <HeaderTooltip explanation="Sold / Available / Held" center>Sold / Avail. / Held</HeaderTooltip>
                   </TableHead>
                   <TableHead className="w-[130px] whitespace-nowrap text-center">
                     <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>%Sold / Tot. %Sold</HeaderTooltip>
                   </TableHead>
-                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
+                  <TableHead className="w-[95px] whitespace-nowrap text-center">
                     <ProjectedMetricHeaderLabel label="Proj. % Sold" />
                   </TableHead>
-                  <TableHead className="w-[110px] whitespace-nowrap border-l border-border/70 text-center">Price Range</TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap text-center">
+                  <TableHead className="w-[110px] whitespace-nowrap text-center border-r border-border/70">Price Range</TableHead>
+                  <TableHead className="w-[150px] whitespace-nowrap border-l border-border/70 text-center">
                     <HeaderTooltip explanation="Sold / Available / Held" center>Sold / Avail. / Held</HeaderTooltip>
                   </TableHead>
                   <TableHead className="w-[130px] whitespace-nowrap text-center">
                     <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>%Sold / Tot. %Sold</HeaderTooltip>
                   </TableHead>
-                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
+                  <TableHead className="w-[95px] whitespace-nowrap text-center">
                     <ProjectedMetricHeaderLabel label="Proj. % Sold" />
                   </TableHead>
-                  <TableHead className="w-[85px] whitespace-nowrap border-l border-border/70 text-center">Price</TableHead>
-                  <TableHead className="w-[150px] whitespace-nowrap text-center">
-                    <HeaderTooltip explanation="Sold / Available / Held" center>Sold / Avail. / Held</HeaderTooltip>
-                  </TableHead>
-                  <TableHead className="w-[130px] whitespace-nowrap text-center">
-                    <HeaderTooltip explanation="% Sold / Total % Sold (including held-back inventory)" center>%Sold / Tot. %Sold</HeaderTooltip>
-                  </TableHead>
-                  <TableHead className="w-[95px] whitespace-nowrap text-center border-r border-border/70">
-                    <ProjectedMetricHeaderLabel label="Proj. % Sold" />
-                  </TableHead>
+                  <TableHead className="w-[85px] whitespace-nowrap text-center border-r border-border/70">Price</TableHead>
                   <TableHead className="w-[150px] whitespace-nowrap border-l border-border/70 text-center">
                     <HeaderTooltip explanation="Sold / Available / Held" center>
                       Sold / Avail. / Held
@@ -8145,7 +8184,11 @@ export default function App() {
                           <EventHealthBadge score={event.eventHealth} event={event} />
                         </TableCell>
 
-                        <TableCell className={cn("text-center sticky left-[480px] z-[1] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]", stickyBg)}>
+                        <TableCell className={cn("text-center sticky left-[480px] z-[1]", stickyBg)}>
+                          <EventReachBadge score={deriveReachScore(event)} />
+                        </TableCell>
+
+                        <TableCell className={cn("text-center sticky left-[560px] z-[1] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.08)]", stickyBg)}>
                           <Select
                             value={dummyPriceTier}
                             onValueChange={(next) => {
@@ -8247,14 +8290,7 @@ export default function App() {
                         </TableCell>
                         <TableCell className="border-r border-border/40">{formatPercent(event.fcrPct)}</TableCell>
 
-                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
-                          {domePriceRange}
-                          <span className="text-muted-foreground/60"> / </span>
-                          <span className="text-muted-foreground">
-                            {event.domeAtp !== null ? formatCurrency(event.domeAtp * tierPriceMultiplier) : "--"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center tabular-nums">
                           {event.domeSold === null || domeAvail === null ? (
                             "--"
                           ) : (
@@ -8282,7 +8318,7 @@ export default function App() {
                             </>
                           )}
                         </TableCell>
-                        <TableCell className="text-center tabular-nums border-r border-border/40">
+                        <TableCell className="text-center tabular-nums">
                           {domeSalesBreakdown.projPctSold === null ? (
                             "--"
                           ) : (
@@ -8317,11 +8353,15 @@ export default function App() {
                             </HoverOverlay>
                           )}
                         </TableCell>
-
-                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
+                        <TableCell className="whitespace-nowrap border-r border-border/40 text-center">
                           {domePriceRange}
+                          <span className="text-muted-foreground/60"> / </span>
+                          <span className="text-muted-foreground">
+                            {event.domeAtp !== null ? formatCurrency(event.domeAtp * tierPriceMultiplier) : "--"}
+                          </span>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center tabular-nums">
                           {event.hallSold === null || hallAvail === null ? (
                             "--"
                           ) : (
@@ -8349,7 +8389,7 @@ export default function App() {
                             </>
                           )}
                         </TableCell>
-                        <TableCell className="text-center tabular-nums border-r border-border/40">
+                        <TableCell className="text-center tabular-nums">
                           {hallSalesBreakdown.projPctSold === null ? (
                             "--"
                           ) : (
@@ -8384,11 +8424,11 @@ export default function App() {
                             </HoverOverlay>
                           )}
                         </TableCell>
-
-                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center">
-                          {event.gaAtp !== null ? formatCurrency(event.gaAtp * tierPriceMultiplier) : "--"}
+                        <TableCell className="whitespace-nowrap border-r border-border/40 text-center">
+                          {domePriceRange}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-center tabular-nums">
+
+                        <TableCell className="whitespace-nowrap border-l border-border/40 text-center tabular-nums">
                           {event.gaSold === null || gaAvail === null ? (
                             "--"
                           ) : (
@@ -8416,7 +8456,7 @@ export default function App() {
                             </>
                           )}
                         </TableCell>
-                        <TableCell className="text-center tabular-nums border-r border-border/40">
+                        <TableCell className="text-center tabular-nums">
                           {gaSalesBreakdown.projPctSold === null ? (
                             "--"
                           ) : (
@@ -8450,6 +8490,9 @@ export default function App() {
                               </span>
                             </HoverOverlay>
                           )}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap border-r border-border/40 text-center">
+                          {event.gaAtp !== null ? formatCurrency(event.gaAtp * tierPriceMultiplier) : "--"}
                         </TableCell>
 
                         <TableCell className="whitespace-nowrap border-l border-border/40 text-center tabular-nums">
@@ -8633,7 +8676,7 @@ export default function App() {
 
                       {isExpanded && (
                         <TableRow className="bg-muted/20 hover:bg-muted/20 border-l-2 border-l-primary">
-                          <TableCell colSpan={23} className="p-0">
+                          <TableCell colSpan={24} className="p-0">
                             <div className="mx-5 my-4 w-fit overflow-clip rounded-lg border border-border/60 bg-card shadow-sm">
                               <div className="flex items-center gap-4 border-b border-border/50 px-4 py-2 bg-secondary/10">
                                 <span className="text-[11px] text-muted-foreground">
