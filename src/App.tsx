@@ -1939,6 +1939,18 @@ function getNetTicketRevenueBreakdown(event: EventRecord): {
   };
 }
 
+/**
+ * Current route path. Prefers the hash so the app works when it is served
+ * from a URL it does not own — a static host, an artifact, anywhere the
+ * pathname belongs to the host rather than to us. Falls back to the pathname
+ * so existing path-style links keep resolving.
+ */
+function currentRoutePath(): string {
+  if (typeof window === "undefined") return "/";
+  const hash = window.location.hash.replace(/^#/, "");
+  return hash.startsWith("/") ? hash : window.location.pathname;
+}
+
 function parseRoute(pathname: string): ViewRoute {
   const seatmapMatch = pathname.match(/^\/seatmap\/([^/]+)\/?$/);
   if (seatmapMatch) {
@@ -5489,16 +5501,20 @@ export default function App() {
     if (typeof window === "undefined") {
       return { type: "price-adjustment" };
     }
-    return parseRoute(window.location.pathname);
+    return parseRoute(currentRoutePath());
   });
 
   useEffect(() => {
     const handlePopState = () => {
-      setRoute(parseRoute(window.location.pathname));
+      setRoute(parseRoute(currentRoutePath()));
     };
 
     window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("hashchange", handlePopState);
+    };
   }, []);
 
   useEffect(() => {
@@ -5537,7 +5553,14 @@ export default function App() {
   const [primaryTab, setPrimaryTab] = useState<"pricing" | "reporting">("pricing");
 
   const navigate = (path: string) => {
-    window.history.pushState({}, "", path);
+    // Hash rather than pushState: on a host that owns the pathname, pushing a
+    // path would navigate away from the app entirely. A sandboxed frame can
+    // refuse history writes outright, so the route still changes if it throws.
+    try {
+      window.history.pushState({}, "", `#${path}`);
+    } catch {
+      /* URL stays put; routing is driven by state below. */
+    }
     setRoute(parseRoute(path));
   };
 
